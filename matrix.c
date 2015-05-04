@@ -14,9 +14,9 @@
 * Important: this function assumes that res is zero initalised
 */
 static void multiply(const float *a, const float *b, float *res) {
-	for(size_t y = WIDTHN; --y;) {
-		for(size_t k = WIDTHN; --k;) {
-			for(size_t x = WIDTHN; --x;) {
+	for(register size_t y = WIDTH; --y;) {
+		for(register size_t k = WIDTH; --k;) {
+			for(register size_t x = WIDTH; --x;) {
 				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
 			}
 		}
