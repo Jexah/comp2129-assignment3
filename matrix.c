@@ -8,7 +8,7 @@
 #define WIDTH 512
 #define WIDTHN 511
 #define IDX(x, y) ((y) * WIDTH + (x))
-#define THREADS 8;
+#define THREADS 8
 
 pthread_t thread_ids[THREADS];
 
@@ -47,7 +47,7 @@ static void *worker(worker_struct *args)
 */
 static void multiply(const float *a, const float *b, float *res) {
 	int workers = 0;
-	for(int y = WIDTHN; y -= WIDTH / THREADS;)
+	for(int y = WIDTHN; y -= WIDTH / THREADS)
 	{
 		worker_struct *pass = malloc(sizeof(worker_struct));
 		pass->a = a;
