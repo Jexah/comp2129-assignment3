@@ -97,11 +97,11 @@ int main(void) {
 	}
 	*/
 	// /* New
-	for (size_t y = WIDTHN; --y;) {
-		for (size_t x = WIDTHN; --x;) {
-			assert(x == y ? c[IDX(x, y)] == WIDTH : c[IDX(x, y)] == 0);
-		}
-	}
+	//for (size_t y = WIDTHN; --y;) {
+		//for (size_t x = WIDTHN; --x;) {
+			//assert(x == y ? c[IDX(x, y)] == WIDTH : c[IDX(x, y)] == 0);
+		//}
+	//}
 	// */
 
 	print(c);
