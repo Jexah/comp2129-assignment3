@@ -16,16 +16,16 @@ const static char *defines =    "#define WIDTH 512\n"
 
 static char *multiply(int width)
 {
-    char *output = calloc(sizeof(char), 50 * WIDTH + 200);
+    char *output = calloc(sizeof(char), 500 * WIDTH + 200);
     char *head = "static void multiply(const float *a, const float *b, float *res)\n{\n";
     strcpy(output, head);
     char *cursor = output + strlen(head);
     char *buffer = calloc(sizeof(char), 100);
-    for(int y = WIDTH - 1; --y;)
+    for(int y = WIDTH; --y;)
     {
-        for(int k = WIDTH - 1; --k;)
+        for(int k = WIDTH; --k;)
         {
-            for(int x = WIDTH - 1; --x;)
+            for(int x = WIDTH; --x;)
             {
                 //"res[IDX(x,y)] += a[IDX(k,y)] * b[IDX(x,k)];\n"
                 sprintf(buffer, "res[IDX(%d,%d)] += a[IDX(%d,%d)] * b[IDX(%d,%d)];\n", x, y, k, y, x, k);
