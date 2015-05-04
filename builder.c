@@ -16,7 +16,7 @@ const static char *defines =    "#define WIDTH 512\n"
 
 static char *multiply(int width)
 {
-    char *output = calloc(sizeof(char), 50 * WIDTH * WIDTH * WIDTH + 200);
+    char *output = malloc(50 * WIDTH * WIDTH * WIDTH + 200);
     char *head = "static void multiply(const float *a, const float *b, float *res)\n{\n";
     strcpy(output, head);
     char *cursor = output + strlen(head);
