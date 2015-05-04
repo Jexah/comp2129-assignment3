@@ -26,7 +26,7 @@ static char *multiply(int width)
             for(int x = WIDTH - 1; --x;)
             {
                 //"res[IDX(x,y)] += a[IDX(k,y)] * b[IDX(x,k)];\n"
-                strcpy(cursor, sprintf(buffer, "res[IDX(%s,%s)] += a[IDX(%s,%s)] * b[IDX(%s,%s)];\n", x, y, k, y, x, k));
+                strcpy(cursor, sprintf(buffer, "res[IDX(%d,%d)] += a[IDX(%d,%d)] * b[IDX(%d,%d)];\n", x, y, k, y, x, k));
                 cursor += strlen(buffer);
             }
         }
