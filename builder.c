@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.n>
 
 #define WIDTH 512
 
