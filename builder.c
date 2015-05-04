@@ -29,7 +29,7 @@ static char *multiply(int width)
             {
                 //"res[IDX(x,y)] += a[IDX(k,y)] * b[IDX(x,k)];\n"
                 sprintf(buffer, "res[IDX(%d,%d)] += a[IDX(%d,%d)] * b[IDX(%d,%d)];\n", x, y, k, y, x, k);
-                printf("y: %d\nk: %d\nx: %d\n", y, k, x);
+                printf("size: %d", sizeof(output));
                 strcpy(cursor, buffer);
                 cursor += strlen(buffer);
             }
