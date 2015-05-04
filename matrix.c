@@ -13,28 +13,15 @@
 * Matrix multiplication
 * Important: this function assumes that res is zero initalised
 */
-/* Old
 static void multiply(const float *a, const float *b, float *res) {
-	for (size_t y = 0; y < WIDTH; y++) {
-		for (size_t k = 0; k < WIDTH; k++) {
-			for (size_t x = 0; x < WIDTH; x++) {
+	for(size_t y = WIDTHN; --y;) {
+		for(size_t k = WIDTHN; --k;) {
+			for(size_t x = WIDTHN; --x;) {
 				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
 			}
 		}
 	}
 }
-// */
-// /* New
-static void multiply(const float *a, const float *b, float *res) {
-	for (size_t y = WIDTHN; --y;) {
-		for (size_t k = WIDTHN; --k;) {
-			for (size_t x = WIDTHN; --x;) {
-				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
-			}
-		}
-	}
-}
-// */
 
 /**
 * Create a Hadamard matrix, if H is Hadamard matrix, then
