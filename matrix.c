@@ -8,17 +8,60 @@
 #define WIDTH 512
 #define WIDTHN 511
 #define IDX(x, y) ((y) * WIDTH + (x))
+#define THREADS 8;
+
+pthread_t thread_ids[THREADS];
+
+typedef struct worker_struct
+{
+	const float *a;
+	const float *b;
+	float *res;
+	int y_start;
+} worker_struct;
+
+static void *worker(worker_struct *args)
+{
+	int ystart = args->y_start;
+	int y_end = args->y_start - WIDTH / THREADS;
+	const float *a = args->a;
+	const float *b = args->b;
+	float *res = args->res;
+	for(register size_t y = y_start; y >= y_end; --y)
+	{
+		for(register size_t k = WIDTH; --k;)
+		{
+			for (register size_t x = WIDTH; --x;)
+			{
+				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
+			}
+		}
+	}
+	return NULL;
+}
+
 
 /**
 * Matrix multiplication
 * Important: this function assumes that res is zero initalised
 */
 static void multiply(const float *a, const float *b, float *res) {
-	for(register size_t y = WIDTH; --y;) {
-		for(register size_t k = WIDTH; --k;) {
-			for(register size_t x = WIDTH; --x;) {
-				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
-			}
+	int workers = 0;
+	for(int y = WIDTHN; y -= WIDTH / THREADS;)
+	{
+		worker_struct *pass = malloc(sizeof(worker_struct));
+		pass->a = a;
+		pass->b = b;
+		pass->res = res;
+		pass->y_start = WIDTHN - (WIDTH / THREADS) * workers;
+		if (pthread_create(0, NULL, worker, pass) != 0)
+		{
+			perror("pthread_create failed");
+			return 1;
+		}
+		else
+		{
+			++workers;
 		}
 	}
 }
@@ -74,6 +117,7 @@ int main(void) {
 
 	// compute the result
 	multiply(a, b, c);
+
 
 	// verify the result
 	/* Old
