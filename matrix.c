@@ -28,7 +28,7 @@ static void *worker(void *args)
 	const float *a = pass->a;
 	const float *b = pass->b;
 	float *res = pass->res;
-	for(register size_t y = y_start; y >= y_end; --y)
+	for(register size_t y = y_start - 1; y >= y_end; --y)
 	{
 		for(register size_t k = WIDTH; --k;)
 		{
@@ -48,14 +48,14 @@ static void *worker(void *args)
 */
 static void multiply(const float *a, const float *b, float *res) {
 	int workers = 0;
-	for(int y = WIDTHN; y -= WIDTH / THREADS;)
+	for(int y = WIDTH; y -= WIDTH / THREADS;)
 	{
 		printf("y: '%d'\n", y);
 		worker_struct *pass = malloc(sizeof(worker_struct));
 		pass->a = a;
 		pass->b = b;
 		pass->res = res;
-		pass->y_start = WIDTHN - (WIDTH / THREADS) * workers;
+		pass->y_start = WIDTH - (WIDTH / THREADS) * workers;
 		if (pthread_create(&thread_ids[workers], NULL, worker, pass) != 0)
 		{
 			perror("pthread_create failed");
