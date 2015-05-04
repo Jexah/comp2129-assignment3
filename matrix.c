@@ -12,6 +12,7 @@
 * Matrix multiplication
 * Important: this function assumes that res is zero initalised
 */
+/* Old
 static void multiply(const float *a, const float *b, float *res) {
 	for (size_t y = 0; y < WIDTH; y++) {
 		for (size_t k = 0; k < WIDTH; k++) {
@@ -21,6 +22,18 @@ static void multiply(const float *a, const float *b, float *res) {
 		}
 	}
 }
+// */
+// /* New
+static void multiply(const float *a, const float *b, float *res) {
+	for (size_t y = WIDTH; --y;) {
+		for (size_t k = WIDTH; --k;) {
+			for (size_t x = WIDTH; --x;) {
+				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
+			}
+		}
+	}
+}
+// */
 
 /**
 * Create a Hadamard matrix, if H is Hadamard matrix, then
@@ -88,8 +101,3 @@ int main(void) {
 	free(c);
 	return 0;
 }
-
-
-
-
-
