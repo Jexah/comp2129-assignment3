@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define M 5
-#define N (1<<M)
+#define M 22
+#define N 484//(1<<M)
 
 typedef double datatype;
 #define DATATYPE_FORMAT "%4.2g"
