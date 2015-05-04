@@ -13,7 +13,7 @@
 * Matrix multiplication
 * Important: this function assumes that res is zero initalised
 */
-/* Old
+///* Old
 static void multiply(const float *a, const float *b, float *res) {
 	for (size_t y = 0; y < WIDTH; y++) {
 		for (size_t k = 0; k < WIDTH; k++) {
@@ -24,7 +24,7 @@ static void multiply(const float *a, const float *b, float *res) {
 	}
 }
 // */
-// /* New
+ /* New
 static void multiply(const float *a, const float *b, float *res) {
 	for (size_t y = WIDTHN; --y;) {
 		for (size_t k = WIDTHN; --k;) {
