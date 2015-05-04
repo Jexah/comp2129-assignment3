@@ -20,13 +20,14 @@ typedef struct worker_struct
 	int y_start;
 } worker_struct;
 
-static void *worker(worker_struct *args)
+static void *worker(void *args)
 {
-	int ystart = args->y_start;
-	int y_end = args->y_start - WIDTH / THREADS;
-	const float *a = args->a;
-	const float *b = args->b;
-	float *res = args->res;
+	worker_struct *pass = (worker_struct *)args;
+	int y_start = pass->y_start;
+	int y_end = y_start - WIDTH / THREADS;
+	const float *a = pass->a;
+	const float *b = pass->b;
+	float *res = pass->res;
 	for(register size_t y = y_start; y >= y_end; --y)
 	{
 		for(register size_t k = WIDTH; --k;)
@@ -47,7 +48,7 @@ static void *worker(worker_struct *args)
 */
 static void multiply(const float *a, const float *b, float *res) {
 	int workers = 0;
-	for(int y = WIDTHN; y -= WIDTH / THREADS)
+	for(int y = WIDTHN; y -= WIDTH / THREADS;)
 	{
 		worker_struct *pass = malloc(sizeof(worker_struct));
 		pass->a = a;
