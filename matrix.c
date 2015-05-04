@@ -6,6 +6,7 @@
 
 /** A square matrix of given width */
 #define WIDTH 512
+#define WIDTHN 511
 #define IDX(x, y) ((y) * WIDTH + (x))
 
 /**
@@ -25,12 +26,12 @@ static void multiply(const float *a, const float *b, float *res) {
 // */
 // /* New
 static void multiply(const float *a, const float *b, float *res) {
-	for (size_t y = WIDTH; --y;) {
-		for (size_t k = WIDTH; --k;) {
-			for (size_t x = WIDTH; --x;) {
+	for (size_t y = WIDTHN; --y;) {
+		for (size_t k = WIDTHN; --k;) {
+			for (size_t x = WIDTHN; --x;) {
 				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
 			}
-		}
+		}s
 	}
 }
 // */
@@ -96,8 +97,8 @@ int main(void) {
 	}
 	*/
 	// /* New
-	for (size_t y = WIDTH; --y;) {
-		for (size_t x = WIDTH; --x;) {
+	for (size_t y = WIDTHN; --y;) {
+		for (size_t x = WIDTHN; --x;) {
 			assert(x == y ? c[IDX(x, y)] == WIDTH : c[IDX(x, y)] == 0);
 		}
 	}
