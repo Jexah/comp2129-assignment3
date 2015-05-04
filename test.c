@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define M 22
+#define M 20
 #define N (1<<M)
 
 typedef double datatype;
