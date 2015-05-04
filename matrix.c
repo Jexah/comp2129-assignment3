@@ -50,7 +50,7 @@ static void multiply(const float *a, const float *b, float *res) {
 	int workers = 0;
 	for(int y = WIDTHN; y -= WIDTH / THREADS;)
 	{
-		printf("%d", y);
+		printf("y: '%d'\n", y);
 		worker_struct *pass = malloc(sizeof(worker_struct));
 		pass->a = a;
 		pass->b = b;
