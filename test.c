@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define M 2
+#define M 3
 #define N (1<<M)
 
 typedef double datatype;
@@ -189,4 +189,4 @@ int main() {
   mul(A,B,C, ai, bi, ci);
   print(C, ci, "C");
   return 0;
-}  
+}
