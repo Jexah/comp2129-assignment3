@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define WIDTH 512
 
@@ -27,7 +28,8 @@ static char *multiply(int width)
             for(int x = WIDTH - 1; --x;)
             {
                 //"res[IDX(x,y)] += a[IDX(k,y)] * b[IDX(x,k)];\n"
-                strcpy(cursor, sprintf(buffer, "res[IDX(%d,%d)] += a[IDX(%d,%d)] * b[IDX(%d,%d)];\n", x, y, k, y, x, k));
+                sprintf(buffer, "res[IDX(%d,%d)] += a[IDX(%d,%d)] * b[IDX(%d,%d)];\n", x, y, k, y, x, k)
+                strcpy(cursor, buffer);
                 cursor += strlen(buffer);
             }
         }
