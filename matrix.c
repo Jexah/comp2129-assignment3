@@ -31,7 +31,7 @@ static void multiply(const float *a, const float *b, float *res) {
 			for (size_t x = WIDTHN; --x;) {
 				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
 			}
-		}s
+		}
 	}
 }
 // */
