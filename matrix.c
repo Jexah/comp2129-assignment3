@@ -88,11 +88,20 @@ int main(void) {
 	multiply(a, b, c);
 
 	// verify the result
+	/* Old
 	for (size_t y = 0; y < WIDTH; y++) {
 		for (size_t x = 0; x < WIDTH; x++) {
 			assert(x == y ? c[IDX(x, y)] == WIDTH : c[IDX(x, y)] == 0);
 		}
 	}
+	*/
+	// /* New
+	for (size_t y = WIDTH; --y;) {
+		for (size_t x = WIDTH; --x;) {
+			assert(x == y ? c[IDX(x, y)] == WIDTH : c[IDX(x, y)] == 0);
+		}
+	}
+	// */
 
 	print(c);
 
