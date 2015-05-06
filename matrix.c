@@ -14,10 +14,11 @@ pthread_t thread_ids[THREADS];
 
 typedef struct worker_struct
 {
-	const float *a;
-	const float *b;
-	float *res;
-	int y_start;
+	const float *a;		// 8  bytes		8  bytes
+	const float *b;		// 8  bytes		16 bytes
+	float *res;			// 4  bytes 	20 bytes
+	int y_start;		// 4  bytes		24 bytes
+	char padding[40];	// 40 bytes		64 bytes
 } worker_struct;
 
 static void *worker(void *args)
