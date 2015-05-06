@@ -104,9 +104,9 @@ static void hadamard(float *m) {
 			int y_plus_quad_size = quad_size - y;
 			for (register size_t x = quad_size - 1; --x;) {
 				const float v = m[IDX(x, y)];
-				m[IDX(x + quad_size, y)] = v;
+				m[IDX(quad_size - x, y)] = v;
 				m[IDX(x, y_plus_quad_size)] = v;
-				m[IDX(x + quad_size, y + quad_size)] = -v;
+				m[IDX(quad_size- x, y_plus_quad_size)] = -v;
 			}
 		}
 		quad_size *= 2;
