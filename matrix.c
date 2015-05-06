@@ -8,7 +8,7 @@
 #define WIDTH 512
 #define WIDTHN 511
 #define IDX(x, y) ((y) * WIDTH + (x))
-#define THREADS 8
+#define THREADS 1
 
 pthread_t thread_ids[THREADS];
 
@@ -48,23 +48,16 @@ static void *worker(void *args)
 */
 static void multiply(const float *a, const float *b, float *res) {
 	int workers = 0;
-	for(int y = WIDTH; y -= WIDTH / THREADS;)
+	worker_struct *pass0 = malloc(sizeof(worker_struct));
+	printf("y: '%d'\n", y = WIDTH - (WIDTH / THREADS) * 0);
+	pass0->a = a;
+	pass0->b = b;
+	pass0->res = res;
+	pass0->y_start = WIDTH - (WIDTH / THREADS) * workers;
+	if (pthread_create(&thread_ids[0], NULL, worker, pass) != 0)
 	{
-		printf("y: '%d'\n", y);
-		worker_struct *pass = malloc(sizeof(worker_struct));
-		pass->a = a;
-		pass->b = b;
-		pass->res = res;
-		pass->y_start = WIDTH - (WIDTH / THREADS) * workers;
-		if (pthread_create(&thread_ids[workers], NULL, worker, pass) != 0)
-		{
-			perror("pthread_create failed");
-			return;
-		}
-		else
-		{
-			++workers;
-		}
+		perror("pthread_create failed");
+		return;
 	}
 }
 
