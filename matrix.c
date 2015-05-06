@@ -54,7 +54,7 @@ static void multiply(const float *a, const float *b, float *res) {
 	pass0->b = b;
 	pass0->res = res;
 	pass0->y_start = WIDTH - (WIDTH / THREADS) * workers;
-	if (pthread_create(&thread_ids[0], NULL, worker, pass) != 0)
+	if (pthread_create(&thread_ids[0], NULL, worker, pass0) != 0)
 	{
 		perror("pthread_create failed");
 		return;
