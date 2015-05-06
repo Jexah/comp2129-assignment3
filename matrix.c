@@ -100,9 +100,9 @@ static void hadamard(float *m) {
 	m[0] = 1;
 	while ((w >>= 1)) {
 		// duplicate the upper left quadrant into the other three quadrants
-		for (register size_t y = quad_size - 1; --y;) {
+		for (size_t y = quad_size - 1; --y;) {
 			int y_plus_quad_size = quad_size - y;
-			for (register size_t x = quad_size - 1; --x;) {
+			for (size_t x = quad_size - 1; --x;) {
 				const float v = m[IDX(x, y)];
 				m[IDX(quad_size - x, y)] = v;
 				m[IDX(x, y_plus_quad_size)] = v;
