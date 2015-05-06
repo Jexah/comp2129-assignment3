@@ -59,6 +59,7 @@ static void multiply(const float *a, const float *b, float *res) {
 		perror("pthread_create failed");
 		return;
 	}
+	worker_struct *pass1 = malloc(sizeof(worker_struct));
 	printf("y: '%d'\n", WIDTH - (WIDTH / THREADS) * 1);
 	pass1->a = a;
 	pass1->b = b;
@@ -69,6 +70,7 @@ static void multiply(const float *a, const float *b, float *res) {
 		perror("pthread_create failed");
 		return;
 	}
+	worker_struct *pass2 = malloc(sizeof(worker_struct));
 	printf("y: '%d'\n", WIDTH - (WIDTH / THREADS) * 2);
 	pass2->a = a;
 	pass2->b = b;
