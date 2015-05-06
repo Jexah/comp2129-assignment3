@@ -98,13 +98,14 @@ static void hadamard(float *m) {
 	assert(((WIDTH - 1) & WIDTH) == 0); // must be a power of 2
 	size_t w = WIDTH, quad_size = 1;
 	m[0] = 1;
-	while ((w >>= 1) != 0) {
+	while ((w >>= 1)) {
 		// duplicate the upper left quadrant into the other three quadrants
-		for (size_t y = 0; y < quad_size; ++y) {
-			for (size_t x = 0; x < quad_size; ++x) {
+		for (register size_t y = quad_size - 1; --y;) {
+			int y_plus_quad_size = y + quad_size;
+			for (register size_t x = quad_size - 1; --x;) {
 				const float v = m[IDX(x, y)];
 				m[IDX(x + quad_size, y)] = v;
-				m[IDX(x, y + quad_size)] = v;
+				m[IDX(x, y_plus_quad_size)] = v;
 				m[IDX(x + quad_size, y + quad_size)] = -v;
 			}
 		}
