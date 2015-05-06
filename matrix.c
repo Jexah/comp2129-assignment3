@@ -49,7 +49,7 @@ static void *worker(void *args)
 static void multiply(const float *a, const float *b, float *res) {
 	int workers = 0;
 	worker_struct *pass0 = malloc(sizeof(worker_struct));
-	printf("y: '%d'\n", y = WIDTH - (WIDTH / THREADS) * 0);
+	printf("y: '%d'\n", WIDTH - (WIDTH / THREADS) * 0);
 	pass0->a = a;
 	pass0->b = b;
 	pass0->res = res;
