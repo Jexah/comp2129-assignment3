@@ -202,13 +202,13 @@ uint32_t *uniform_matrix(uint32_t value)
 
     if(g_elements & 1)
     {
-        *matrix = pattern
+        *((uint32_t *)matrix) = pattern
         matrix += sizeof(int);
     }
 
     while (i--)
     {
-        *matrix = pattern
+        *((uint32_t *)matrix) = pattern
         matrix += sizeof(long long);
     }
 
