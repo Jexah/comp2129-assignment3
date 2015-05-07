@@ -118,6 +118,14 @@ uint32_t *new_matrix(void)
 }
 
 /**
+ * Returns new matrix without setting elements
+ */
+uint32_t *new_matrix_malloc(void)
+{
+    return malloc(g_elements * sizeof(uint32_t));
+}
+
+/**
  * Returns new identity matrix
  */
 uint32_t *identity_matrix(void)
@@ -152,17 +160,34 @@ uint32_t *random_matrix(uint32_t seed)
 /**
  * Returns new matrix with all elements set to given value
  */
+ // /* New
 uint32_t *uniform_matrix(uint32_t value)
 {
-    uint32_t *matrix = new_matrix();
+    uint32_t *matrix = new_matrix_malloc();
 
-    for (ssize_t i = 0; i < g_elements; i++)
+    register long long pattern = value << 32 + value;
+
+    for (register ssize_t i = g_elements; i-=2;)
     {
-        matrix[i] = value;
+        memcpy(matrix[i], pattern);
     }
 
     return matrix;
 }
+// /*
+/* Old
+uint32_t *uniform_matrix(uint32_t value)
+{
+   uint32_t *matrix = new_matrix();
+
+   for (ssize_t i = 0; i < g_elements; i++)
+   {
+       matrix[i] = value;
+   }
+
+   return matrix;
+}
+// */
 
 /**
  * Returns new matrix with elements in sequence from given start and step
@@ -170,7 +195,7 @@ uint32_t *uniform_matrix(uint32_t value)
  // /* New
  uint32_t *sequence_matrix(uint32_t start, register uint32_t step)
  {
-     uint32_t *matrix = new_matrix();
+     uint32_t *matrix = new_matrix_malloc();
      register uint32_t current = start + g_elements * step;
 
      for (register ssize_t i = g_elements - 1; --i;)
