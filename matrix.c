@@ -529,5 +529,3 @@ uint32_t get_frequency(const uint32_t *matrix, uint32_t value)
 
     return 0;
 }
-
-int main()
