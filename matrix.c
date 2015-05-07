@@ -169,7 +169,7 @@ uint32_t *uniform_matrix(uint32_t value)
 
     for (register ssize_t i = g_elements; i-=2;)
     {
-        memcpy(matrix[i], pattern);
+        memcpy(matrix[i], pattern, sizeof(long long));
     }
 
     return matrix;
