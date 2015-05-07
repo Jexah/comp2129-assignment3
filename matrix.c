@@ -1,163 +1,490 @@
-#include <assert.h>
+#include <math.h>
+#include <time.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <stdbool.h>
 #include <pthread.h>
+#include <inttypes.h>
 
-/** A square matrix of given width */
-#define WIDTH 512
-#define WIDTHN 511
-#define IDX(x, y) ((y) * WIDTH + (x))
-#define THREADS 3
+#include "matrix.h"
 
-pthread_t thread_ids[THREADS];
+static uint32_t g_seed = 0;
 
-typedef struct worker_struct
-{
-	const float *a;		// 8  bytes		8  bytes
-	const float *b;		// 8  bytes		16 bytes
-	float *res;			// 4  bytes 	20 bytes
-	int y_start;		// 4  bytes		24 bytes
-	char padding[40];	// 40 bytes		64 bytes
-} worker_struct;
+static ssize_t g_width = 0;
+static ssize_t g_height = 0;
+static ssize_t g_elements = 0;
 
-static void *worker(void *args)
-{
-	worker_struct *pass = (worker_struct *)args;
-	int y_start = pass->y_start;
-	int y_end = y_start - WIDTH / THREADS;
-	const float *a = pass->a;
-	const float *b = pass->b;
-	float *res = pass->res;
-	for(register size_t y = y_start - 1; y >= y_end; --y)
-	{
-		for(register size_t k = WIDTH; --k;)
-		{
-			for (register size_t x = WIDTH; --x;)
-			{
-				res[IDX(x, y)] += a[IDX(k, y)] * b[IDX(x, k)];
-			}
-		}
-	}
-	return NULL;
-}
+static ssize_t g_nthreads = 1;
 
+////////////////////////////////
+///     UTILITY FUNCTIONS    ///
+////////////////////////////////
 
 /**
-* Matrix multiplication
-* Important: this function assumes that res is zero initalised
-*/
-static void multiply(const float *a, const float *b, float *res) {
-	int workers = 0;
-	worker_struct *pass0 = malloc(sizeof(worker_struct));
-	printf("y: '%d'\n", WIDTH - (WIDTH / THREADS) * 0);
-	pass0->a = a;
-	pass0->b = b;
-	pass0->res = res;
-	pass0->y_start = WIDTH - (WIDTH / THREADS) * workers;
-	if (pthread_create(&thread_ids[0], NULL, worker, pass0) != 0)
-	{
-		perror("pthread_create failed");
-		return;
-	}
-	worker_struct *pass1 = malloc(sizeof(worker_struct));
-	printf("y: '%d'\n", WIDTH - (WIDTH / THREADS) * 1);
-	pass1->a = a;
-	pass1->b = b;
-	pass1->res = res;
-	pass1->y_start = WIDTH - (WIDTH / THREADS) * workers;
-	if (pthread_create(&thread_ids[0], NULL, worker, pass1) != 1)
-	{
-		perror("pthread_create failed");
-		return;
-	}
-	worker_struct *pass2 = malloc(sizeof(worker_struct));
-	printf("y: '%d'\n", WIDTH - (WIDTH / THREADS) * 2);
-	pass2->a = a;
-	pass2->b = b;
-	pass2->res = res;
-	pass2->y_start = WIDTH - (WIDTH / THREADS) * workers;
-	if (pthread_create(&thread_ids[2], NULL, worker, pass2) != 0)
-	{
-		perror("pthread_create failed");
-		return;
-	}
+ * Returns pseudorandom number determined by the seed
+ */
+uint32_t fast_rand(void) {
+
+    g_seed = (214013 * g_seed + 2531011);
+    return (g_seed >> 16) & 0x7FFF;
 }
 
 /**
-* Create a Hadamard matrix, if H is Hadamard matrix, then
-* HH^T = nI, where I is the identity matrix and n is the width.
-* It makes it easy to verify that matrix multiplication was done correctly.
-*
-* Sylverster's construction (implemented here)
-* only works for matrices that have width that is a power of 2
-*
-* Note that this construction produces matrices that are symmentric
-*/
-static void hadamard(float *m) {
-	assert(((WIDTH - 1) & WIDTH) == 0); // must be a power of 2
-	size_t w = WIDTH, quad_size = 1;
-	m[0] = 1;
-	while ((w >>= 1)) {
-		// duplicate the upper left quadrant into the other three quadrants
-		for (size_t y = quad_size - 1; --y;) {
-			int y_plus_quad_size = quad_size - y;
-			for (size_t x = quad_size - 1; --x;) {
-				const float v = m[IDX(x, y)];
-				m[IDX(quad_size - x, y)] = v;
-				m[IDX(x, y_plus_quad_size)] = v;
-				m[IDX(quad_size- x, y_plus_quad_size)] = -v;
-			}
-		}
-		quad_size *= 2;
-	}
+ * Sets the seed used when generating pseudorandom numbers
+ */
+void set_seed(uint32_t seed) {
+
+    g_seed = seed;
 }
 
-/** Prints a matrix */
-static void print(const float *m) {
-	for (size_t y = 0; y < WIDTH; y++) {
-		for (size_t x = 0; x < WIDTH; x++) {
-			printf("%5.1f ", m[IDX(x, y)]);
-		}
-		puts("");
-	}
+/**
+ * Sets the number of threads available
+ */
+void set_nthreads(ssize_t count) {
+
+    g_nthreads = count;
 }
-int main(void) {
 
-	// allocate memory for the matrices
-	float *a, *b, *c;
-	a = malloc(WIDTH * WIDTH * sizeof(float));
-	b = malloc(WIDTH * WIDTH * sizeof(float));
+/**
+ * Sets the dimensions of the matrix
+ */
+void set_dimensions(ssize_t order) {
 
-	// initalise the result matrix
-	c = calloc(WIDTH * WIDTH, sizeof(float));
-	hadamard(a);
-	memcpy(b, a, WIDTH * WIDTH * sizeof(float));
+    g_width = order;
+    g_height = order;
 
-	// compute the result
-	multiply(a, b, c);
+    g_elements = g_width * g_height;
+}
 
+/**
+ * Displays given matrix
+ */
+void display(const uint32_t* matrix) {
 
-	// verify the result
-	/* Old
-	for (size_t y = 0; y < WIDTH; y++) {
-		for (size_t x = 0; x < WIDTH; x++) {
-			assert(x == y ? c[IDX(x, y)] == WIDTH : c[IDX(x, y)] == 0);
-		}
-	}
-	*/
-	// /* New
-	//for (size_t y = WIDTHN; --y;) {
-		//for (size_t x = WIDTHN; --x;) {
-			//assert(x == y ? c[IDX(x, y)] == WIDTH : c[IDX(x, y)] == 0);
-		//}
-	//}
-	// */
+    for (ssize_t i = 0; i < g_height; i++) {
+        for (ssize_t j = 0; j < g_width; j++) {
+            printf("%" PRIu32 " ", matrix[i * g_width + j]);
+        }
 
-	print(c);
+        printf("\n");
+    }
+}
 
-	free(a);
-	free(b);
-	free(c);
-	return 0;
+/**
+ * Displays given matrix row
+ */
+void display_row(const uint32_t* matrix, ssize_t row) {
+
+    for (ssize_t i = 0; i < g_width; i++) {
+        printf("%" PRIu32 " ", matrix[row * g_width + i]);
+    }
+
+    printf("\n");
+}
+
+/**
+ * Displays given matrix column
+ */
+void display_column(const uint32_t* matrix, ssize_t column) {
+
+    for (ssize_t i = 0; i < g_height; i++) {
+        printf("%" PRIu32 "\n", matrix[i * g_width + column]);
+    }
+}
+
+/**
+ * Displays the value stored at the given element index
+ */
+void display_element(const uint32_t* matrix, ssize_t row, ssize_t column) {
+
+    printf("%" PRIu32 "\n", matrix[row * g_width + column]);
+}
+
+////////////////////////////////
+///   MATRIX INITALISATIONS  ///
+////////////////////////////////
+
+/**
+ * Returns new matrix with all elements set to zero
+ */
+uint32_t* new_matrix(void) {
+
+    return calloc(g_elements, sizeof(uint32_t));
+}
+
+/**
+ * Returns new identity matrix
+ */
+uint32_t* identity_matrix(void) {
+
+    uint32_t* matrix = new_matrix();
+
+    for (ssize_t i = 0; i < g_width; i++) {
+        matrix[i * g_width + i] = 1;
+    }
+
+    return matrix;
+}
+
+/**
+ * Returns new matrix with elements generated at random using given seed
+ */
+uint32_t* random_matrix(uint32_t seed) {
+
+    uint32_t* matrix = new_matrix();
+
+    set_seed(seed);
+
+    for (ssize_t i = 0; i < g_elements; i++) {
+        matrix[i] = fast_rand();
+    }
+
+    return matrix;
+}
+
+/**
+ * Returns new matrix with all elements set to given value
+ */
+uint32_t* uniform_matrix(uint32_t value) {
+
+    uint32_t* matrix = new_matrix();
+
+    for (ssize_t i = 0; i < g_elements; i++) {
+        matrix[i] = value;
+    }
+
+    return matrix;
+}
+
+/**
+ * Returns new matrix with elements in sequence from given start and step
+ */
+uint32_t* sequence_matrix(uint32_t start, uint32_t step) {
+
+    uint32_t* matrix = new_matrix();
+    uint32_t current = start;
+
+    for (ssize_t i = 0; i < g_elements; i++) {
+        matrix[i] = current;
+        current += step;
+    }
+
+    return matrix;
+}
+
+////////////////////////////////
+///     MATRIX OPERATIONS    ///
+////////////////////////////////
+
+/**
+ * Returns new matrix with elements cloned from given matrix
+ */
+uint32_t* cloned(const uint32_t* matrix) {
+
+    uint32_t* result = new_matrix();
+
+    for (ssize_t i = 0; i < g_elements; i++) {
+        result[i] = matrix[i];
+    }
+
+    return result;
+}
+
+/**
+ * Returns new matrix with elements in ascending order
+ */
+uint32_t* sorted(const uint32_t* matrix) {
+
+    uint32_t* result = cloned(matrix);
+
+    /*
+        to do
+
+        1 0    0 0
+        0 1 => 1 1
+
+        4 3    1 2
+        2 1 => 3 4
+    */
+
+    return result;
+}
+
+/**
+ * Returns new matrix with elements rotated 90 degrees clockwise
+ */
+uint32_t* rotated(const uint32_t* matrix) {
+
+    uint32_t* result = new_matrix();
+
+    for (ssize_t y = 0; y < g_height; y++) {
+        for (ssize_t x = 0; x < g_width; x++) {
+            result[x * g_height + (g_height - y - 1)] = matrix[y * g_width + x];
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Returns new matrix with elements ordered in reverse
+ */
+uint32_t* reversed(const uint32_t* matrix) {
+
+    uint32_t* result = new_matrix();
+
+    for (ssize_t i = 0; i < g_elements; i++) {
+        result[i] = matrix[g_elements - 1 - i];
+    }
+
+    return result;
+}
+
+/**
+ * Returns new transposed matrix
+ */
+uint32_t* transposed(const uint32_t* matrix) {
+
+    uint32_t* result = new_matrix();
+
+    for (ssize_t y = 0; y < g_height; y++) {
+        for (ssize_t x = 0; x < g_width; x++) {
+            result[x * g_width + y] = matrix[y * g_width + x];
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Returns new matrix with scalar added to each element
+ */
+uint32_t* scalar_add(const uint32_t* matrix, uint32_t scalar) {
+
+    uint32_t* result = new_matrix();
+
+    /*
+        to do
+
+        1 0        2 1
+        0 1 + 1 => 1 2
+
+        1 2        5 6
+        3 4 + 4 => 7 8
+    */
+
+    return result;
+}
+
+/**
+ * Returns new matrix with scalar multiplied to each element
+ */
+uint32_t* scalar_mul(const uint32_t* matrix, uint32_t scalar) {
+
+    uint32_t* result = new_matrix();
+
+    /*
+        to do
+
+        1 0        2 0
+        0 1 x 2 => 0 2
+
+        1 2        2 4
+        3 4 x 2 => 6 8
+    */
+
+    return result;
+}
+
+/**
+ * Returns new matrix with elements added at the same index
+ */
+uint32_t* matrix_add(const uint32_t* matrix_a, const uint32_t* matrix_b) {
+
+    uint32_t* result = new_matrix();
+
+    /*
+        to do
+
+        1 0   0 1    1 1
+        0 1 + 1 0 => 1 1
+
+        1 2   4 4    5 6
+        3 4 + 4 4 => 7 8
+    */
+
+    return result;
+}
+
+/**
+ * Returns new matrix, multiplying the two matrices together
+ */
+uint32_t* matrix_mul(const uint32_t* matrix_a, const uint32_t* matrix_b) {
+
+    uint32_t* result = new_matrix();
+
+    /*
+        to do
+
+        1 2   1 0    1 2
+        3 4 x 0 1 => 3 4
+
+        1 2   5 6    19 22
+        3 4 x 7 8 => 43 50
+    */
+
+    return result;
+}
+
+/**
+ * Returns new matrix, powering the matrix to the exponent
+ */
+uint32_t* matrix_pow(const uint32_t* matrix, uint32_t exponent) {
+
+    uint32_t* result = new_matrix();
+
+    /*
+        to do
+
+        1 2        1 0
+        3 4 ^ 0 => 0 1
+
+        1 2        199 290
+        3 4 ^ 4 => 435 634
+    */
+
+    return result;
+}
+
+////////////////////////////////
+///       COMPUTATIONS       ///
+////////////////////////////////
+
+/**
+ * Returns the sum of all elements
+ */
+uint32_t get_sum(const uint32_t* matrix) {
+
+    /*
+        to do
+
+        1 2
+        2 1 => 6
+
+        1 1
+        1 1 => 4
+    */
+
+    return 0;
+}
+
+/**
+ * Returns the most frequently occuring value
+ * or UINT32_MAX when there is a tie
+ */
+uint32_t get_mode(const uint32_t* matrix) {
+
+    /*
+        to do
+
+        1 2
+        2 2 => 2
+
+        1 2
+        3 4 => UINT32_MAX
+    */
+
+    return 0;
+}
+
+/**
+ * Returns the trace of the matrix
+ */
+uint32_t get_trace(const uint32_t* matrix) {
+
+    /*
+        to do
+
+        1 0
+        0 1 => 2
+
+        2 1
+        1 2 => 4
+    */
+
+    return 0;
+}
+
+/**
+ * Returns the upper median
+ */
+uint32_t get_median(const uint32_t* matrix) {
+
+    /*
+        to do
+
+        1 0
+        0 1 => 1
+
+        1 1
+        2 2 => 2
+    */
+
+    return 0;
+}
+
+/**
+ * Returns the smallest value in the matrix
+ */
+uint32_t get_minimum(const uint32_t* matrix) {
+
+    /*
+        to do
+
+        1 2
+        3 4 => 1
+
+        4 3
+        2 1 => 1
+    */
+
+    return 0;
+}
+
+/**
+ * Returns the largest value in the matrix
+ */
+uint32_t get_maximum(const uint32_t* matrix) {
+
+    /*
+        to do
+
+        1 2
+        3 4 => 4
+
+        4 3
+        2 1 => 4
+    */
+
+    return 0;
+}
+
+/**
+ * Returns the frequency of the value in the matrix
+ */
+uint32_t get_frequency(const uint32_t* matrix, uint32_t value) {
+
+    /*
+        to do
+
+        1 1
+        1 1 :: 1 => 4
+
+        1 0
+        0 1 :: 2 => 0
+    */
+
+    return 0;
 }
