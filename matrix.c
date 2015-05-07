@@ -161,7 +161,7 @@ uint32_t *random_matrix(uint32_t seed)
 /**
  * Returns new matrix with all elements set to given value
  */
- // /* memcpy
+ /* memcpy
 uint32_t *uniform_matrix(register const uint32_t value)
 {
     register void *matrix = new_matrix_malloc();
@@ -189,19 +189,30 @@ uint32_t *uniform_matrix(register const uint32_t value)
     return (uint32_t *)(matrix - g_elements * sizeof(int));
 }
 // */
- /* register long assignment
+// /* register long assignment
 uint32_t *uniform_matrix(uint32_t value)
 {
-   uint32_t *matrix = new_matrix_malloc();
+    register void *matrix = new_matrix_malloc();
 
-   register long long pattern = (value << 32) + value;
+    register long long pattern = value;
+    pattern <<= 32;
+    pattern += value;
 
-   for (register ssize_t i = g_elements; i-=2;)
-   {
-       matrix[i] = pattern;
-   }
+    register ssize_t i = g_elements >> 1;
 
-   return matrix;
+    if(g_elements & 1)
+    {
+        *matrix = pattern
+        matrix += sizeof(int);
+    }
+
+    while (i--)
+    {
+        *matrix = pattern
+        matrix += sizeof(long long);
+    }
+
+    return (uint32_t *)(matrix - g_elements * sizeof(int));
 }
 // */
 /* Old
