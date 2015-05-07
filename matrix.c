@@ -162,9 +162,9 @@ uint32_t *random_matrix(uint32_t seed)
  * Returns new matrix with all elements set to given value
  */
  // /* memcpy
-uint32_t *uniform_matrix(uint32_t value)
+uint32_t *uniform_matrix(register const uint32_t value)
 {
-    uint32_t *matrix = new_matrix_malloc();
+    register uint32_t *matrix = new_matrix_malloc();
 
     long long pattern = value;
     pattern <<= 32;
@@ -172,7 +172,8 @@ uint32_t *uniform_matrix(uint32_t value)
 
     for (register ssize_t i = g_elements; i-=2;)
     {
-        memcpy(matrix[i], &pattern, sizeof(long long));
+        memcpy((matrix + i), &pattern, sizeof(long long));
+        matrix += i;
     }
 
     return matrix;
