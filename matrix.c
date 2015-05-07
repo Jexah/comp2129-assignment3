@@ -174,7 +174,7 @@ uint32_t *uniform_matrix(register const uint32_t value)
 
     if(!g_elements % 2)
     {
-        memcpy((matrix + --i), &(pattern+4), sizeof(int));
+        memcpy((matrix + --i), (&pattern)+4, sizeof(int));
     }
 
     while (i--)
