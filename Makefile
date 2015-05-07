@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -g -std=gnu11 -Wall -Werror -g
+CFLAGS = -g -std=gnu11 -Wall -Werror -p
 LDFLAGS = -pthread
 
 .PHONY: all clean
