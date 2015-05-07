@@ -170,7 +170,7 @@ uint32_t *uniform_matrix(uint32_t value)
 
     for (register ssize_t i = g_elements; i-=2;)
     {
-        memcpy(matrix[i], pattern, sizeof(long long));
+        memcpy(matrix[i], &pattern, sizeof(long long));
     }
 
     return matrix;
@@ -194,12 +194,12 @@ uint32_t *uniform_matrix(uint32_t value)
  * Returns new matrix with elements in sequence from given start and step
  */
  // /* New
- uint32_t *sequence_matrix(uint32_t start, register uint32_t step)
+ uint32_t *sequence_matrix(const uint32_t start, register const uint32_t step)
  {
      uint32_t *matrix = new_matrix_malloc();
      register uint32_t current = start + g_elements * step;
 
-     for (register ssize_t i = g_elements - 1; --i;)
+     for (register ssize_t i = g_elements; --i;)
      {
          matrix[i] = current;
          current -= step;
