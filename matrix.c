@@ -175,7 +175,7 @@ uint32_t *uniform_matrix(uint32_t value)
 
     return matrix;
 }
-// /*
+// */
  /* register long assignment
 uint32_t *uniform_matrix(uint32_t value)
 {
@@ -190,7 +190,7 @@ uint32_t *uniform_matrix(uint32_t value)
 
    return matrix;
 }
-// /*
+// */
 /* Old
 uint32_t *uniform_matrix(uint32_t value)
 {
