@@ -1,4 +1,4 @@
-CC = clang
+CC = gcc
 CFLAGS = -g -std=gnu11 -Wall -Werror -p
 LDFLAGS = -pthread
 
