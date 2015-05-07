@@ -172,13 +172,12 @@ uint32_t *uniform_matrix(register const uint32_t value)
 
     register long long *pattern_ptr = &pattern;
 
-    register ssize_t i = g_elements;
+    register ssize_t i = g_elements >> 1;
 
-    if(!g_elements % 2)
+    if(g_elements & 1)
     {
         memcpy(matrix, pattern_ptr, sizeof(int));
         matrix += sizeof(int);
-        i--;
     }
 
     while (i--)
@@ -187,7 +186,7 @@ uint32_t *uniform_matrix(register const uint32_t value)
         matrix += sizeof(long long);
     }
 
-    return (uint32_t *)matrix;
+    return (uint32_t *)(matrix - g_elements * sizeof(int));
 }
 // */
  /* register long assignment
