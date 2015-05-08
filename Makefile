@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -std=gnu11 -Wall -Werror -p
+CFLAGS = -O1 -std=gnu11 -Wall -Werror
 LDFLAGS = -pthread
 
 .PHONY: all clean

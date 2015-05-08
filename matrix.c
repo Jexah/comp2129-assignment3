@@ -282,44 +282,6 @@ uint32_t *cloned(const uint32_t *matrix) {
 }
 
 /**
- * Returns new matrix with elements in ascending order
- */
-uint32_t *sorted(const uint32_t *matrix) {
-
-    uint32_t *result = cloned(matrix);
-
-    /*
-        to do
-
-        1 0    0 0
-        0 1 => 1 1
-
-        4 3    1 2
-        2 1 => 3 4
-    */
-
-    return result;
-}
-
-/**
- * Returns new matrix with elements rotated 90 degrees clockwise
- */
-uint32_t *rotated(const uint32_t *matrix)
-{
-    uint32_t *result = new_matrix();
-
-    for (ssize_t y = 0; y < g_height; y++)
-    {
-        for (ssize_t x = 0; x < g_width; x++)
-        {
-            result[x * g_height + (g_height - y - 1)] = matrix[y * g_width + x];
-        }
-    }
-
-    return result;
-}
-
-/**
  * Returns new matrix with elements ordered in reverse
  */
 uint32_t *reversed(const uint32_t *matrix)
@@ -481,26 +443,6 @@ uint32_t get_sum(const uint32_t *matrix)
 }
 
 /**
- * Returns the most frequently occuring value
- * or UINT32_MAX when there is a tie
- */
-uint32_t get_mode(const uint32_t *matrix)
-{
-
-    /*
-        to do
-
-        1 2
-        2 2 => 2
-
-        1 2
-        3 4 => UINT32_MAX
-    */
-
-    return 0;
-}
-
-/**
  * Returns the trace of the matrix
  */
 uint32_t get_trace(const uint32_t *matrix)
@@ -514,25 +456,6 @@ uint32_t get_trace(const uint32_t *matrix)
 
         2 1
         1 2 => 4
-    */
-
-    return 0;
-}
-
-/**
- * Returns the upper median
- */
-uint32_t get_median(const uint32_t *matrix)
-{
-
-    /*
-        to do
-
-        1 0
-        0 1 => 1
-
-        1 1
-        2 2 => 2
     */
 
     return 0;
