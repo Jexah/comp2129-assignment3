@@ -9,9 +9,6 @@ all: matrix
 matrix: main.c matrix.c
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-debug: main.c matrix.c
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o -g $@
-
 clean:
 	-rm -f *.o
 	-rm -f matrix
