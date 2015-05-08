@@ -203,7 +203,6 @@ uint32_t *uniform_matrix(const uint32_t value)
 
     if(odd)
     {
-        current_value += step;
         *((uint32_t *)matrix) = pattern;
         matrix += sizeof(int);
     }
