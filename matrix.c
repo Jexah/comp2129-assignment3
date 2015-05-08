@@ -176,7 +176,7 @@ uint32_t *uniform_matrix(uint32_t value)
 
     *((unsigned long long *)matrix) = pattern;
     matrix += sizeof(int);
-    matrix += sizeof(int) * ~(g_elements & 1);
+    matrix += sizeof(int) * !(g_elements & 1);
 
     while (i--)
     {
@@ -238,7 +238,7 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
     register void *matrix = new_matrix_malloc();
 
     register unsigned long long current_value = start;
-    unsigned long long even = ~(g_elements & 1);
+    unsigned long long even = !(g_elements & 1);
     register unsigned long long i = g_elements;
     i -= 1;
     i >>= 1;
