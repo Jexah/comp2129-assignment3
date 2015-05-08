@@ -185,7 +185,6 @@ uint32_t *uniform_matrix(const uint32_t value)
         *((unsigned long long *)matrix) = pattern;
         matrix += sizeof(long long);
     }
-    matrix += sizeof(long long);
     matrix -= g_elements * sizeof(int);
 
     return (uint32_t *)(matrix);
