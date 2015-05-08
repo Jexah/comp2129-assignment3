@@ -64,11 +64,12 @@ void set_dimensions(ssize_t order)
  */
 void display(const uint32_t *matrix)
 {
-    for (ssize_t i = 0; i < g_height; i++)
+    for (ssize_t y = 0; y < g_height; y++)
     {
-        for (ssize_t j = 0; j < g_width; j++)
+        for (ssize_t x = 0; x < g_width; x++)
         {
-            printf("%" PRIu32 " ", matrix[i * g_width + j]);
+            if (x > 0) printf(" ");
+            printf("%" PRIu32 " ", matrix[y * g_width + x]);
         }
         printf("\n");
     }
@@ -79,13 +80,14 @@ void display(const uint32_t *matrix)
  */
 void display_row(const uint32_t *matrix, ssize_t row)
 {
-    for (ssize_t i = 0; i < g_width; i++)
+    for (ssize_t x = 0; x < g_width; x++)
     {
-        printf("%" PRIu32 " ", matrix[row * g_width + i]);
+        if (x > 0) printf(" ");
+        printf("%" PRIu32, matrix[row * g_width + x]);
     }
-
     printf("\n");
 }
+
 
 /**
  * Displays given matrix column
