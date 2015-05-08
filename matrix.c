@@ -161,38 +161,10 @@ uint32_t *random_matrix(uint32_t seed)
 /**
  * Returns new matrix with all elements set to given value
  */
- /* memcpy
-uint32_t *uniform_matrix(register const uint32_t value)
-{
-    register void *matrix = new_matrix_malloc();
-
-    long long pattern = value;
-    pattern <<= 32;
-    pattern += value;
-
-    register long long *pattern_ptr = &pattern;
-
-    register ssize_t i = g_elements >> 1;
-
-    if(g_elements & 1)
-    {
-        memcpy(matrix, pattern_ptr, sizeof(int));
-        matrix += sizeof(int);
-    }
-
-    while (i--)
-    {
-        memcpy(matrix, pattern_ptr, sizeof(long long));
-        matrix += sizeof(long long);
-    }
-
-    return (uint32_t *)(matrix - g_elements * sizeof(int));
-}
-// */
 // /* register long assignment
 uint32_t *uniform_matrix(uint32_t value)
 {
-    register void *matrix = new_matrix_malloc();
+    register void *restrict matrix = new_matrix_malloc();
 
     register long long pattern = value;
     pattern <<= 32;
@@ -213,6 +185,34 @@ uint32_t *uniform_matrix(uint32_t value)
     }
 
     return (uint32_t *)(matrix - g_elements * sizeof(int));
+}
+// */
+/* memcpy
+uint32_t *uniform_matrix(register const uint32_t value)
+{
+   register void *matrix = new_matrix_malloc();
+
+   long long pattern = value;
+   pattern <<= 32;
+   pattern += value;
+
+   register long long *pattern_ptr = &pattern;
+
+   register ssize_t i = g_elements >> 1;
+
+   if(g_elements & 1)
+   {
+       memcpy(matrix, pattern_ptr, sizeof(int));
+       matrix += sizeof(int);
+   }
+
+   while (i--)
+   {
+       memcpy(matrix, pattern_ptr, sizeof(long long));
+       matrix += sizeof(long long);
+   }
+
+   return (uint32_t *)(matrix - g_elements * sizeof(int));
 }
 // */
 /* Old
@@ -238,7 +238,7 @@ uint32_t *uniform_matrix(uint32_t value)
      uint32_t *matrix = new_matrix_malloc();
      register uint32_t current = start + g_elements * step;
 
-     for (register ssize_t i = g_elements; --i;)
+     for (register long long i = g_elements; --i;)
      {
          matrix[i] = current;
          current -= step;
