@@ -267,7 +267,7 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
         current_value += step;
     }
 
-    return (uint32_t *)(matrix - g_elements * sizeof(int)]);
+    return (uint32_t *)(matrix - g_elements * sizeof(int));
 }
 // */
 /* Original
