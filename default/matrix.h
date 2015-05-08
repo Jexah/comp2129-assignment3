@@ -25,24 +25,19 @@ uint32_t* uniform_matrix(uint32_t value);
 uint32_t* sequence_matrix(uint32_t start, uint32_t step);
 
 uint32_t* cloned(const uint32_t* matrix);
-uint32_t* sorted(const uint32_t* matrix);
-uint32_t* rotated(const uint32_t* matrix);
 uint32_t* reversed(const uint32_t* matrix);
 uint32_t* transposed(const uint32_t* matrix);
 
 uint32_t* scalar_add(const uint32_t* matrix, uint32_t scalar);
 uint32_t* scalar_mul(const uint32_t* matrix, uint32_t scalar);
-
+uint32_t* matrix_pow(const uint32_t* matrix, uint32_t exponent);
 uint32_t* matrix_add(const uint32_t* matrix_a, const uint32_t* matrix_b);
 uint32_t* matrix_mul(const uint32_t* matrix_a, const uint32_t* matrix_b);
-uint32_t* matrix_pow(const uint32_t* matrix, uint32_t exponent);
 
 /* compute operations */
 
 uint32_t get_sum(const uint32_t* matrix);
-uint32_t get_mode(const uint32_t* matrix);
 uint32_t get_trace(const uint32_t* matrix);
-uint32_t get_median(const uint32_t* matrix);
 uint32_t get_minimum(const uint32_t* matrix);
 uint32_t get_maximum(const uint32_t* matrix);
 uint32_t get_frequency(const uint32_t* matrix, uint32_t value);

@@ -5,7 +5,6 @@
 #include <string.h>
 #include <strings.h>
 #include <stdbool.h>
-#include <pthread.h>
 #include <inttypes.h>
 
 #include "matrix.h"
@@ -149,8 +148,6 @@ void command_help(void) {
         "SET <key> = sequence <start> <step>\n"
         "\n"
         "SET <key> = cloned <matrix>\n"
-        "SET <key> = sorted <matrix>\n"
-        "SET <key> = rotated <matrix>\n"
         "SET <key> = reversed <matrix>\n"
         "SET <key> = transposed <matrix>\n"
         "\n"
@@ -166,9 +163,7 @@ void command_help(void) {
         "SHOW <key> element <row> <column>\n"
         "\n"
         "COMPUTE sum <key>\n"
-        "COMPUTE mode <key>\n"
         "COMPUTE trace <key>\n"
-        "COMPUTE median <key>\n"
         "COMPUTE minimum <key>\n"
         "COMPUTE maximum <key>\n"
         "COMPUTE frequency <key> <value>\n";
@@ -188,7 +183,6 @@ void command_set(const char* line) {
     char arg2[MAX_BUFFER];
 
     int argc = sscanf(line, "%s %s = %s %s %s", cmd, key, func, arg1, arg2);
-
     if (argc < 3) {
         puts("invalid arguments");
         return;
@@ -215,12 +209,6 @@ void command_set(const char* line) {
             } else if (strcasecmp(func, "cloned") == 0) {
                 MATRIX_GUARD(arg1);
                 matrix = cloned(m);
-            } else if (strcasecmp(func, "sorted") == 0) {
-                MATRIX_GUARD(arg1);
-                matrix = sorted(m);
-            } else if (strcasecmp(func, "rotated") == 0) {
-                MATRIX_GUARD(arg1);
-                matrix = rotated(m);
             } else if (strcasecmp(func, "reversed") == 0) {
                 MATRIX_GUARD(arg1);
                 matrix = reversed(m);
@@ -289,13 +277,11 @@ void command_show(char* line) {
     char arg2[MAX_BUFFER];
 
     int argc = sscanf(line, "%s %s %s %s %s", cmd, key, func, arg1, arg2);
-
     if (argc < 2) {
         goto invalid;
     }
 
     MATRIX_GUARD(key);
-
     if (argc == 2) {
         display(m);
         return;
@@ -335,23 +321,17 @@ void command_compute(char* line) {
     char arg1[MAX_BUFFER];
 
     int argc = sscanf(line, "%s %s %s %s", cmd, func, key, arg1);
-
     if (argc < 3) {
         goto invalid;
     }
 
     MATRIX_GUARD(key);
-
     uint32_t result = 0;
 
     if (strcasecmp(func, "sum") == 0) {
         result = get_sum(m);
-    } else if (strcasecmp(func, "mode") == 0) {
-        result = get_mode(m);
     } else if (strcasecmp(func, "trace") == 0) {
         result = get_trace(m);
-    } else if (strcasecmp(func, "median") == 0) {
-        result = get_median(m);
     } else if (strcasecmp(func, "minimum") == 0) {
         result = get_minimum(m);
     } else if (strcasecmp(func, "maximum") == 0) {
