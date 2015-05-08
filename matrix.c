@@ -164,7 +164,7 @@ uint32_t *random_matrix(uint32_t seed)
 // /* register long assignment
 uint32_t *uniform_matrix(uint32_t value)
 {
-    register void *restrict matrix = new_matrix_malloc();
+    register void *matrix = new_matrix_malloc();
 
     register unsigned long long pattern = value;
     pattern <<= 32;
@@ -172,13 +172,13 @@ uint32_t *uniform_matrix(uint32_t value)
 
     register unsigned long long i = g_elements >> 1;
 
-    *((uint32_t *)matrix) = pattern;
+    *((unsigned long long *)matrix) = pattern;
     matrix += sizeof(int);
     matrix += sizeof(int) * ~(g_elements & 1);
 
     while (i--)
     {
-        *((uint32_t *)matrix) = pattern;
+        *((unsigned long long *)matrix) = pattern;
         matrix += sizeof(long long);
     }
 
@@ -233,7 +233,7 @@ uint32_t *uniform_matrix(uint32_t value)
  // /* New
 uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
 {
-    register void *restrict matrix = new_matrix_malloc();
+    register void *matrix = new_matrix_malloc();
 
     register unsigned long long current_value = start;
     unsigned long long even = ~(g_elements & 1);
@@ -244,7 +244,7 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
     current_value += step;
     current_write += current_value;
     current_value += step * even;
-    *((uint32_t *)matrix) = current_write;
+    *((unsigned long long *)matrix) = current_write;
     matrix += sizeof(int);
     matrix += sizeof(int) * even;
 
@@ -254,7 +254,7 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
         current_write <<= 32;
         current_value += step;
         current_write += current_value;
-        *((uint32_t *)matrix) = current_write;
+        *((unsigned long long *)matrix) = current_write;
         matrix += sizeof(long long);
         current_value += step;
     }
