@@ -194,19 +194,19 @@ uint32_t *uniform_matrix(const uint32_t value)
 {
     register void *matrix = new_matrix_malloc();
 
+    unsigned long long odd = g_elements & 1;
+    register unsigned long long i = g_elements;
+
     register unsigned long long pattern = value;
     pattern <<= 32;
     pattern += value;
 
-    register unsigned long long i = g_elements;
-    i -= 1;
-    i >>= 1;
-
-    unsigned long long odd = g_elements & 1;
-
-    *((unsigned long long *)matrix) = pattern;
-    matrix += sizeof(int);
-    matrix += sizeof(int) * !odd;
+    if(odd)
+    {
+        current_value += step;
+        *((uint32_t *)matrix) = pattern;
+        matrix += sizeof(int);
+    }
 
     while (i--)
     {
@@ -264,6 +264,38 @@ uint32_t *uniform_matrix(uint32_t value)
  * Returns new matrix with elements in sequence from given start and step
  */
  // /* New
+uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
+{
+    register void *matrix = new_matrix_malloc();
+
+    register unsigned long long current_value = start;
+    unsigned long long odd = g_elements & 1;
+    register unsigned long long i = g_elements;
+    register unsigned long long current_write = current_value;
+
+    if(odd)
+    {
+        current_value += step;
+        *((uint32_t *)matrix) = current_write;
+        matrix += sizeof(int);
+    }
+
+    while(i--)
+    {
+        current_write = current_value;
+        current_write += step;
+        current_write <<= 32;
+        current_write += current_value;
+        current_value += step;
+        current_value += step;
+        *((unsigned long long *)matrix) = current_write;
+        matrix += sizeof(long long);
+    }
+
+    return (uint32_t *)(matrix - g_elements * sizeof(int));
+}
+// */
+ /* New
 uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
 {
     register void *matrix = new_matrix_malloc();
