@@ -69,7 +69,7 @@ void display(const uint32_t *matrix)
         for (ssize_t x = 0; x < g_width; x++)
         {
             if (x > 0) printf(" ");
-            printf("%" PRIu32 " ", matrix[y * g_width + x]);
+            printf("%" PRIu32, matrix[y * g_width + x]);
         }
         printf("\n");
     }
