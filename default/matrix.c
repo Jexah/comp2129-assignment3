@@ -64,7 +64,7 @@ void display(const uint32_t* matrix) {
     for (ssize_t y = 0; y < g_height; y++) {
         for (ssize_t x = 0; x < g_width; x++) {
             if (x > 0) printf(" ");
-            printf("%" PRIu32 " ", matrix[y * g_width + x]);
+            printf("%" PRIu32, matrix[y * g_width + x]);
         }
 
         printf("\n");
@@ -89,8 +89,8 @@ void display_row(const uint32_t* matrix, ssize_t row) {
  */
 void display_column(const uint32_t* matrix, ssize_t column) {
 
-    for (ssize_t i = 0; i < g_height; i++) {
-        printf("%" PRIu32 "\n", matrix[i * g_width + column]);
+    for (ssize_t y = 0; y < g_height; y++) {
+        printf("%" PRIu32 "\n", matrix[y * g_width + column]);
     }
 }
 
