@@ -172,7 +172,7 @@ uint32_t *uniform_matrix(uint32_t value)
 
     register unsigned long long i = g_elements;
     i -= 1;
-    i >> 1;
+    i >>= 1;
 
     *((unsigned long long *)matrix) = pattern;
     matrix += sizeof(int);
@@ -241,7 +241,7 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
     unsigned long long even = ~(g_elements & 1);
     register unsigned long long i = g_elements;
     i -= 1;
-    i >> 1;
+    i >>= 1;
 
     register unsigned long long current_write = current_value;
     current_write <<= 32;
