@@ -205,6 +205,8 @@ void command_set(const char* line) {
                 matrix = random_matrix(seed);
             } else if (strcasecmp(func, "uniform") == 0) {
                 uint32_t value = atoll(arg1);
+                value <<= 32;
+                value >>= 32;
                 matrix = uniform_matrix(value);
             } else if (strcasecmp(func, "cloned") == 0) {
                 MATRIX_GUARD(arg1);
