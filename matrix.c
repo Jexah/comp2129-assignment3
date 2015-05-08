@@ -182,7 +182,7 @@ uint32_t *uniform_matrix(uint32_t value)
         matrix += sizeof(long long);
     }
 
-    return (uint32_t *)(matrix - g_elements * sizeof(int));
+    return (uint32_t *)(matrix - g_elements * sizeof(int) - sizeof(long long));
 }
 // */
 /* memcpy
@@ -259,7 +259,7 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
         current_value += step;
     }
 
-    return (uint32_t *)(matrix - g_elements * sizeof(int));
+    return (uint32_t *)(matrix - g_elements * sizeof(int) - sizeof(long long));
 }
 // */
 /* Original
