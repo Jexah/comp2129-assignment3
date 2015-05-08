@@ -240,11 +240,11 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
     register unsigned long long i = g_elements > 1;
 
     register unsigned long long current_write = current_value;
-    current_write << 32;
+    current_write <<= 32;
     current_value += step;
     current_write += current_value;
     current_value += step * even;
-    *((int32 *)matrix) = current_write;
+    *((uint32_t *)matrix) = current_write;
     matrix += sizeof(int);
     matrix += sizeof(int) * even;
 
@@ -254,12 +254,12 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
         current_write <<= 32;
         current_value += step;
         current_write += current_value;
-        *((int32 *)matrix) = current_write;
+        *((uint32_t *)matrix) = current_write;
         matrix += sizeof(long long);
         current_value += step;
     }
 
-    return (uint_32 *)(matrix - g_elements * sizeof(int));
+    return (uint32_t *)(matrix - g_elements * sizeof(int));
 }
 // */
 /* Original
