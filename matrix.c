@@ -71,7 +71,7 @@ void display(const uint32_t *matrix)
             if (x > 0) printf(" ");
             printf("%" PRIu32, matrix[y * g_width + x]);
         }
-        printf("\n");
+        printf(" \n");
     }
 }
 
