@@ -166,17 +166,15 @@ uint32_t *uniform_matrix(uint32_t value)
 {
     register void *restrict matrix = new_matrix_malloc();
 
-    register long long pattern = value;
+    register unsigned long long pattern = value;
     pattern <<= 32;
     pattern += value;
 
-    register ssize_t i = g_elements >> 1;
+    register unsigned long long i = g_elements >> 1;
 
-    if(g_elements & 1)
-    {
-        *((uint32_t *)matrix) = pattern;
-        matrix += sizeof(int);
-    }
+    *((uint32_t *)matrix) = pattern;
+    matrix += sizeof(int);
+    matrix += sizeof(int) * ~(g_elements & 1);
 
     while (i--)
     {
@@ -233,34 +231,51 @@ uint32_t *uniform_matrix(uint32_t value)
  * Returns new matrix with elements in sequence from given start and step
  */
  // /* New
- uint32_t *sequence_matrix(const uint32_t start, register const uint32_t step)
- {
-     uint32_t *matrix = new_matrix_malloc();
-     register uint32_t current = start + g_elements * step;
+uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
+{
+    register void *restrict matrix = new_matrix_malloc();
 
-     for (register long long i = g_elements; --i;)
-     {
-         matrix[i] = current;
-         current -= step;
-     }
+    register unsigned long long current_value = start;
+    unsigned long long even = ~(g_elements & 1);
+    register unsigned long long i = g_elements > 1;
 
-     return matrix;
- }
- // */
- /* Original
- uint32_t *sequence_matrix(uint32_t start, uint32_t step)
- {
-     uint32_t *matrix = new_matrix();
-     uint32_t current = start;
+    register unsigned long long current_write = current_value;
+    current_write << 32;
+    current_value += step;
+    current_write += current_value;
+    current_value += step * even;
+    *((int32 *)matrix) = current_write;
+    matrix += sizeof(int);
+    matrix += sizeof(int) * even;
 
-     for (ssize_t i = 0; i < g_elements; i++)
-     {
-         matrix[i] = current;
-         current += step;
-     }
+    while(i--)
+    {
+        current_write = current_value;
+        current_write <<= 32;
+        current_value += step;
+        current_write += current_value;
+        *((int32 *)matrix) = current_write;
+        matrix += sizeof(long long);
+        current_value += step;
+    }
 
-     return matrix;
- }
+    return (uint_32 *)(matrix - g_elements * sizeof(int));
+}
+// */
+/* Original
+uint32_t *sequence_matrix(uint32_t start, uint32_t step)
+{
+    uint32_t *matrix = new_matrix();
+    uint32_t current = start;
+
+    for (ssize_t i = 0; i < g_elements; i++)
+    {
+        matrix[i] = current;
+        current += step;
+    }
+
+    return matrix;
+}
 // */
 ////////////////////////////////
 ///     MATRIX OPERATIONS    ///
