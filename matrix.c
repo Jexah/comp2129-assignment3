@@ -162,7 +162,7 @@ uint32_t *random_matrix(uint32_t seed)
  * Returns new matrix with all elements set to given value
  */
 // /* register long assignment
-uint32_t *uniform_matrix(uint32_t value)
+uint32_t *uniform_matrix(const uint32_t value)
 {
     register void *matrix = new_matrix_malloc();
 
@@ -174,17 +174,21 @@ uint32_t *uniform_matrix(uint32_t value)
     i -= 1;
     i >>= 1;
 
+    unsigned long long odd = g_elements & 1;
+
     *((unsigned long long *)matrix) = pattern;
     matrix += sizeof(int);
-    matrix += sizeof(int) * !(g_elements & 1);
+    matrix += sizeof(int) * !odd;
 
     while (i--)
     {
         *((unsigned long long *)matrix) = pattern;
         matrix += sizeof(long long);
     }
+    matrix += sizeof(long long) * odd;
+    matrix -= g_elements * sizeof(int);
 
-    return (uint32_t *)(matrix - g_elements * sizeof(int) + sizeof(long long));
+    return (uint32_t *)(matrix);
 }
 // */
 /* memcpy
@@ -263,7 +267,7 @@ uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
         current_value += step;
     }
 
-    return (uint32_t *)(matrix - g_elements * sizeof(int) + sizeof(long long));
+    return (uint32_t *)(matrix - g_elements * sizeof(int)]);
 }
 // */
 /* Original
