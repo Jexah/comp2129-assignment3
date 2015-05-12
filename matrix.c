@@ -299,7 +299,7 @@ uint32_t *reversed(register uint32_t *matrix)
 
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
 	register uint32_t *result = new_matrix();
-	register int32_t each = g_elements / g_nthreads;
+	register uint32_t each = g_elements / g_nthreads;
 	pthread_barrier_t mybarrier;
 	pthread_barrier_init(&mybarrier, NULL, g_nthreads);
 	matrix += g_elements - 1;
@@ -310,12 +310,12 @@ uint32_t *reversed(register uint32_t *matrix)
 		todo->matrix = matrix;
 		todo->result = result;
 		todo->total = each;
-		pthread_create(thread_ids++, NULL, reverse_worker, todo);
+		pthread_create(thread_ids[i], NULL, reverse_worker, todo);
 		matrix -= each;
 		result += each;
 	}
 
-	register int32_t remaining = g_elements % g_nthreads;
+	register uint32_t remaining = g_elements % g_nthreads;
 
 	while(remaining--)
 	{
