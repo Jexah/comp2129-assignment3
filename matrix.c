@@ -20,7 +20,7 @@ static ssize_t g_elements = 0;
 
 static ssize_t g_nthreads = 1;
 
-static pthread_t *thread_ids;
+//static pthread_t *thread_ids;
 
 ////////////////////////////////
 ///     UTILITY FUNCTIONS    ///
@@ -273,7 +273,7 @@ uint32_t *cloned(const uint32_t *matrix) {
  * Returns new matrix with elements ordered in reverse
  */
 
-// /*
+ /*
 struct reverse_worker_struct
 {
 	uint32_t *result;
@@ -331,7 +331,7 @@ uint32_t *reversed(register uint32_t *matrix)
 	return result - g_elements;
 }
 // */
-/* No  threads (0.600s)
+///* No  threads (0.600s)
 uint32_t *reversed(register uint32_t *matrix)
 {
 	register uint32_t *result = new_matrix_malloc();
