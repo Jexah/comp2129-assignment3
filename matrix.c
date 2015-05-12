@@ -323,7 +323,7 @@ uint32_t *reversed(register uint32_t *matrix)
 	}
 
 	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;) {
-		pthread_join(thread_ids[i], NULL);
+		pthread_join(thread_ids[threads_waiting - 1], NULL);
 	}
 
 	free(thread_ids);
