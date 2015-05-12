@@ -7,3 +7,4 @@
 *.stats
 !LICENCE
 !Makefile
+!tests/

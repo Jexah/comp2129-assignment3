@@ -165,11 +165,18 @@ uint32_t *random_matrix(uint32_t seed)
 	set_seed(seed);
 
 	register uint32_t i = g_elements >> 2;
+	register uint64_t store = 0;
 
 	while(i--)
 	{
-		((int64_t *)matrix)[0] = ((uint64_t)fast_rand() << 32) + fast_rand();
-		((int64_t *)matrix)[1] = ((uint64_t)fast_rand() << 32) + fast_rand();
+		store = fast_rand();
+		store <<= 32;
+		store += fast_rand();
+		((int64_t *)matrix)[0] = (store << 32) + (store >> 32);
+		store = fast_rand();
+		store <<= 32;
+		store += fast_rand();
+		((int64_t *)matrix)[1] = (store << 32) + (store >> 32);
 		matrix += 4;
 	}
 
@@ -223,7 +230,7 @@ uint32_t *sequence_matrix(const uint32_t start, const register uint32_t step)
 		return uniform_matrix(start);
 	}
 
-	register uint32_t *matrix= new_matrix_malloc();
+	register uint32_t *matrix = new_matrix_malloc();
 
 	register uint32_t current = start;
 	register uint32_t i = g_elements >> 1;
