@@ -88,7 +88,7 @@ void display_row(register uint32_t *matrix, const ssize_t row)
 	//printf("%" PRIu32, *matrix++);
 	for (register uint32_t i = g_width - 1; i--;)
 	{
-		printf("% " PRIu32, *matrix++);
+		printf("%"  PRIu32 " ", *matrix++);
 	}
 	printf("\n");
 }
