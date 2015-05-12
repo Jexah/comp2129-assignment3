@@ -2,3 +2,4 @@ set a = random 56
 set b = random 62234
 set c = random -3582
 set d = random 827347
+bye
