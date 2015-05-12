@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <inttypes.h>
 #include <string.h>
+#include <immintrin.h>
 
 #include "matrix.h"
 
@@ -19,6 +20,8 @@ static ssize_t g_elements = 0;
 
 static ssize_t g_nthreads = 1;
 
+static pthread_t *thread_ids;
+
 ////////////////////////////////
 ///     UTILITY FUNCTIONS    ///
 ////////////////////////////////
@@ -26,10 +29,10 @@ static ssize_t g_nthreads = 1;
 /**
  * Returns pseudorandom number determined by the seed
  */
-uint32_t fast_rand(void)
+inline static uint32_t fast_rand(void)
 {
-    g_seed = (214013 * g_seed + 2531011);
-    return (g_seed >> 16) & 0x7FFF;
+	g_seed = (214013 * g_seed + 2531011);
+	return (g_seed >> 16) & 0x7FFF;
 }
 
 /**
@@ -37,7 +40,7 @@ uint32_t fast_rand(void)
  */
 void set_seed(uint32_t seed)
 {
-    g_seed = seed;
+	g_seed = seed;
 }
 
 /**
@@ -45,7 +48,7 @@ void set_seed(uint32_t seed)
  */
 void set_nthreads(ssize_t count)
 {
-    g_nthreads = count;
+	g_nthreads = count;
 }
 
 /**
@@ -53,59 +56,64 @@ void set_nthreads(ssize_t count)
  */
 void set_dimensions(ssize_t order)
 {
-    g_width = order;
-    g_height = order;
+	g_width = order;
+	g_height = order;
 
-    g_elements = g_width * g_height;
+	g_elements = g_width * g_height;
 }
 
 /**
  * Displays given matrix
  */
-void display(const uint32_t *matrix)
+void display(register uint32_t *matrix)
 {
-    for (ssize_t y = 0; y < g_height; y++)
-    {
-        for (ssize_t x = 0; x < g_width; x++)
-        {
-            if (x > 0) printf(" ");
-            printf("%" PRIu32, matrix[y * g_width + x]);
-        }
-        printf(" \n");
-    }
+	register uint32_t rows_remaining = g_height;
+	while(rows_remaining--)
+	{
+		printf("%" PRIu32, *matrix++);
+		for (register uint32_t i = g_width - 1; i--;)
+		{
+			printf(" %" PRIu32, *matrix++);
+		}
+		printf("\n");
+	}
 }
 
 /**
  * Displays given matrix row
  */
-void display_row(const uint32_t *matrix, ssize_t row)
+void display_row(register uint32_t *matrix, const ssize_t row)
 {
-    for (ssize_t x = 0; x < g_width; x++)
-    {
-        if (x > 0) printf(" ");
-        printf("%" PRIu32, matrix[row * g_width + x]);
-    }
-    printf("\n");
+	matrix += row * g_width;
+	printf("%" PRIu32, *matrix++);
+	for (register uint32_t i = g_width - 1; i--;)
+	{
+		printf(" %" PRIu32, *matrix++);
+	}
+	printf("\n");
 }
 
 
 /**
  * Displays given matrix column
  */
-void display_column(const uint32_t *matrix, ssize_t column)
+void display_column(register uint32_t *matrix, const ssize_t column)
 {
-    for (ssize_t i = 0; i < g_height; i++)
-    {
-        printf("%" PRIu32 "\n", matrix[i * g_width + column]);
-    }
+	register uint32_t rows_remaining = g_height;
+	matrix += column;
+	while(rows_remaining--)
+	{
+		printf("%" PRIu32 "\n", *matrix);
+		matrix += g_width;
+	}
 }
 
 /**
  * Displays the value stored at the given element index
  */
-void display_element(const uint32_t *matrix, ssize_t row, ssize_t column)
+void display_element(const uint32_t *matrix, const ssize_t row, const ssize_t column)
 {
-    printf("%" PRIu32 "\n", matrix[row * g_width + column]);
+	printf("%" PRIu32 "\n", matrix[row * g_width + column]);
 }
 
 ////////////////////////////////
@@ -115,17 +123,17 @@ void display_element(const uint32_t *matrix, ssize_t row, ssize_t column)
 /**
  * Returns new matrix with all elements set to zero
  */
-uint32_t *new_matrix(void)
+inline static uint32_t *new_matrix(void)
 {
-    return calloc(g_elements, sizeof(uint32_t));
+	return calloc(g_elements, sizeof(uint32_t));
 }
 
 /**
  * Returns new matrix without setting elements
  */
-uint32_t *new_matrix_malloc(void)
+inline static uint32_t *new_matrix_malloc(void)
 {
-    return malloc(g_elements * sizeof(uint32_t));
+	return malloc(g_elements * sizeof(uint32_t));
 }
 
 /**
@@ -133,14 +141,18 @@ uint32_t *new_matrix_malloc(void)
  */
 uint32_t *identity_matrix(void)
 {
-    uint32_t *matrix = new_matrix();
+	register uint32_t *matrix= new_matrix();
 
-    for (ssize_t i = 0; i < g_width; i++)
-    {
-        matrix[i * g_width + i] = 1;
-    }
+	register uint32_t gap = g_width + 1;
+	register uint32_t i = g_height;
 
-    return matrix;
+	while(i--)
+	{
+		*matrix = 1;
+		matrix += gap;
+	}
+
+	return (matrix - g_elements - gap + 1);
 }
 
 /**
@@ -148,201 +160,92 @@ uint32_t *identity_matrix(void)
  */
 uint32_t *random_matrix(uint32_t seed)
 {
-    uint32_t *matrix = new_matrix();
+	register uint32_t *matrix = new_matrix_malloc();
 
-    set_seed(seed);
+	set_seed(seed);
 
-    for (ssize_t i = 0; i < g_elements; i++)
-    {
-        matrix[i] = fast_rand();
-    }
+	register uint32_t i = g_elements >> 2;
 
-    return matrix;
+	while(i--)
+	{
+		((int64_t *)matrix)[0] = ((uint64_t)fast_rand() << 32) + fast_rand();
+		((int64_t *)matrix)[1] = ((uint64_t)fast_rand() << 32) + fast_rand();
+		matrix += 4;
+	}
+
+	i = g_elements & 3;
+	while(i--)
+	{
+		*matrix++ = fast_rand();
+	}
+
+	return (matrix - g_elements);
 }
 
 /**
  * Returns new matrix with all elements set to given value
 */
- /* register long assignment -> simple
-uint32_t *uniform_matrix(uint32_t value)
+uint32_t *uniform_matrix(const register uint32_t value)
 {
-    register void *matrix = new_matrix_malloc();
+	if(value == 0)
+	{
+		return (uint32_t *)new_matrix();
+	}
+	register uint32_t *matrix= new_matrix_malloc();
 
-    register long long pattern = value;
-    pattern <<= 32;
-    pattern += value;
+	const register int64_t value64 = ((uint64_t)value << 32) + value;
 
-    register ssize_t i = g_elements >> 1;
+	register uint32_t i = g_elements >> 2;
 
-    if(g_elements & 1)
-    {
-        *((uint32_t *)matrix) = pattern;
-        matrix += sizeof(int);
-    }
+	while(i--)
+	{
+		((int64_t *)matrix)[0] = value64;
+		((int64_t *)matrix)[1] = value64;
+		matrix += 4;
+	}
 
-    while (i--)
-    {
-        *((uint32_t *)matrix) = pattern;
-        matrix += sizeof(long long);
-    }
+	i = g_elements & 3;
+	while(i--)
+	{
+		*matrix++ = value;
+	}
 
-    return (uint32_t *)(matrix - g_elements * sizeof(int));
+	return (matrix - g_elements);
 }
-// */
-// /* register long assignment -> complex
-uint32_t *uniform_matrix(const uint32_t value)
-{
-    register void *matrix = new_matrix_malloc();
-
-    unsigned long long odd = g_elements & 1;
-    register unsigned long long i = g_elements;
-
-    register unsigned long long pattern = value;
-    pattern <<= 32;
-    pattern += value;
-
-    if(odd)
-    {
-        *((uint32_t *)matrix) = pattern;
-        matrix += sizeof(int);
-    }
-
-    while (i--)
-    {
-        *((unsigned long long *)matrix) = pattern;
-        matrix += sizeof(long long);
-    }
-    matrix -= g_elements * sizeof(int);
-
-    return (uint32_t *)(matrix);
-}
-// */
-/* memcpy
-uint32_t *uniform_matrix(register const uint32_t value)
-{
-   register void *matrix = new_matrix_malloc();
-
-   long long pattern = value;
-   pattern <<= 32;
-   pattern += value;
-
-   register long long *pattern_ptr = &pattern;
-
-   register ssize_t i = g_elements >> 1;
-
-   if(g_elements & 1)
-   {
-       memcpy(matrix, pattern_ptr, sizeof(int));
-       matrix += sizeof(int);
-   }
-
-   while (i--)
-   {
-       memcpy(matrix, pattern_ptr, sizeof(long long));
-       matrix += sizeof(long long);
-   }
-
-   return (uint32_t *)(matrix - g_elements * sizeof(int));
-}
-// */
-/* Old
-uint32_t *uniform_matrix(uint32_t value)
-{
-   uint32_t *matrix = new_matrix();
-
-   for (ssize_t i = 0; i < g_elements; i++)
-   {
-       matrix[i] = value;
-   }
-
-   return matrix;
-}
-// */
 
 /**
  * Returns new matrix with elements in sequence from given start and step
  */
- // /* New
-uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
+uint32_t *sequence_matrix(const uint32_t start, const register uint32_t step)
 {
-    register void *matrix = new_matrix_malloc();
+	if(step == 0)
+	{
+		return uniform_matrix(start);
+	}
 
-    register unsigned long long current_value = start;
-    unsigned long long odd = g_elements & 1;
-    register unsigned long long i = g_elements;
-    register unsigned long long current_write = current_value;
+	register uint32_t *matrix= new_matrix_malloc();
 
-    if(odd)
-    {
-        current_value += step;
-        *((uint32_t *)matrix) = current_write;
-        matrix += sizeof(int);
-    }
+	register uint32_t current = start;
+	register uint32_t i = g_elements >> 1;
+	uint32_t odd = g_elements;
 
-    while(i--)
-    {
-        current_write = current_value;
-        current_write += step;
-        current_write <<= 32;
-        current_write += current_value;
-        current_value += step;
-        current_value += step;
-        *((unsigned long long *)matrix) = current_write;
-        matrix += sizeof(long long);
-    }
+	while(i--)
+	{
+		*matrix = current;
+		matrix[1] = current + step;
+		current += step + step;
+		matrix += 2;
+	}
 
-    return (uint32_t *)(matrix - g_elements * sizeof(int));
+	if(odd)
+	{
+		*matrix = current;
+		matrix += 1;
+	}
+
+	return (matrix - g_elements);
 }
-// */
- /* New
-uint32_t *sequence_matrix(register uint32_t start, register const uint32_t step)
-{
-    register void *matrix = new_matrix_malloc();
 
-    register unsigned long long current_value = start;
-    unsigned long long even = !(g_elements & 1);
-    register unsigned long long i = g_elements;
-    i -= 1;
-    i >>= 1;
-
-    register unsigned long long current_write = current_value;
-    current_write <<= 32;
-    current_value += step;
-    current_write += current_value;
-    current_value += step * even;
-    *((unsigned long long *)matrix) = current_write;
-    matrix += sizeof(int);
-    matrix += sizeof(int) * even;
-
-    while(i--)
-    {
-        current_write = current_value;
-        current_write <<= 32;
-        current_value += step;
-        current_write += current_value;
-        *((unsigned long long *)matrix) = current_write;
-        matrix += sizeof(long long);
-        current_value += step;
-    }
-
-    return (uint32_t *)(matrix - g_elements * sizeof(int));
-}
-// */
-/* Original
-uint32_t *sequence_matrix(uint32_t start, uint32_t step)
-{
-    uint32_t *matrix = new_matrix();
-    uint32_t current = start;
-
-    for (ssize_t i = 0; i < g_elements; i++)
-    {
-        matrix[i] = current;
-        current += step;
-    }
-
-    return matrix;
-}
-// */
 ////////////////////////////////
 ///     MATRIX OPERATIONS    ///
 ////////////////////////////////
@@ -352,47 +255,103 @@ uint32_t *sequence_matrix(uint32_t start, uint32_t step)
  */
 uint32_t *cloned(const uint32_t *matrix) {
 
-    uint32_t *result = new_matrix();
+	uint32_t *result = new_matrix_malloc();
 
-    for (ssize_t i = g_elements - 1; --i;)
-    {
-        result[i] = matrix[i];
-    }
+	memcpy((void *)result, (void *)matrix, g_elements * sizeof(uint32_t));
 
-    return result;
+	return result;
 }
 
 /**
  * Returns new matrix with elements ordered in reverse
  */
-uint32_t *reversed(const uint32_t *matrix)
+
+// /*
+struct reverse_worker_struct
 {
-    uint32_t *result = new_matrix();
-
-    for (ssize_t i = 0; i < g_elements; i++)
-    {
-        result[i] = matrix[g_elements - 1 - i];
-    }
-
-    return result;
+	uint32_t *result;
+	uint32_t *matrix;
+	uint32_t total;
+};
+static void *reverse_worker(void *arg)
+{
+	struct reverse_worker_struct *arguments = (struct reverse_worker_struct *)arg;
+	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *result = arguments->result;
+	register uint32_t total = arguments->total;
+	while(total--)
+	{
+		*result++ = *matrix--;
+	}
+	free(arg);
+	return NULL;
 }
+
+uint32_t *reversed(register uint32_t *matrix)
+{
+
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+	register uint32_t *result = new_matrix();
+	register int32_t each = g_elements / g_nthreads;
+	pthread_barrier_t mybarrier;
+	pthread_barrier_init(&mybarrier, NULL, g_nthreads);
+	matrix += g_elements - 1;
+
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct reverse_worker_struct *todo = malloc(sizeof(struct reverse_worker_struct));
+		todo->matrix = matrix;
+		matrix -= each;
+		todo->result = result;
+		result += each;
+		todo->total = each;
+		pthread_create(thread_ids++, NULL, reverse_worker, todo);
+	}
+
+	register int32_t remaining = g_elements % g_nthreads;
+
+	while(remaining--)
+	{
+		*result++ = *matrix--;
+	}
+
+	pthread_barrier_wait(&mybarrier);
+
+	free(thread_ids - g_nthreads);
+
+	return result - g_elements;
+}
+// */
+ /* No  threads (0.600s)
+uint32_t *reversed(register uint32_t *matrix)
+{
+	register uint32_t *result = new_matrix_malloc();
+	register uint32_t i = g_elements;
+	matrix += g_elements - 1;
+	while(i--)
+	{
+		*result++ = *matrix--;
+	}
+	return result - g_elements;
+}
+// */
 
 /**
  * Returns new transposed matrix
  */
 uint32_t *transposed(const uint32_t* matrix)
 {
-    uint32_t *result = new_matrix();
+	uint32_t *result = new_matrix();
 
-    for (ssize_t y = 0; y < g_height; y++)
-    {
-        for (ssize_t x = 0; x < g_width; x++)
-        {
-            result[x * g_width + y] = matrix[y * g_width + x];
-        }
-    }
+	for (ssize_t y = 0; y < g_height; y++)
+	{
+		for (ssize_t x = 0; x < g_width; x++)
+		{
+			result[x * g_width + y] = matrix[y * g_width + x];
+		}
+	}
 
-    return result;
+	return result;
 }
 
 /**
@@ -401,9 +360,9 @@ uint32_t *transposed(const uint32_t* matrix)
 uint32_t *scalar_add(const uint32_t *matrix, uint32_t scalar)
 {
 
-    uint32_t *result = new_matrix();
+	uint32_t *result = new_matrix();
 
-    /*
+	/*
         to do
 
         1 0        2 1
@@ -413,7 +372,7 @@ uint32_t *scalar_add(const uint32_t *matrix, uint32_t scalar)
         3 4 + 4 => 7 8
     */
 
-    return result;
+	return result;
 }
 
 /**
@@ -422,9 +381,9 @@ uint32_t *scalar_add(const uint32_t *matrix, uint32_t scalar)
 uint32_t *scalar_mul(const uint32_t *matrix, uint32_t scalar)
 {
 
-    uint32_t *result = new_matrix();
+	uint32_t *result = new_matrix();
 
-    /*
+	/*
         to do
 
         1 0        2 0
@@ -434,7 +393,7 @@ uint32_t *scalar_mul(const uint32_t *matrix, uint32_t scalar)
         3 4 x 2 => 6 8
     */
 
-    return result;
+	return result;
 }
 
 /**
@@ -443,9 +402,9 @@ uint32_t *scalar_mul(const uint32_t *matrix, uint32_t scalar)
 uint32_t *matrix_add(const uint32_t *matrix_a, const uint32_t *matrix_b)
 {
 
-    uint32_t *result = new_matrix();
+	uint32_t *result = new_matrix();
 
-    /*
+	/*
         to do
 
         1 0   0 1    1 1
@@ -455,7 +414,7 @@ uint32_t *matrix_add(const uint32_t *matrix_a, const uint32_t *matrix_b)
         3 4 + 4 4 => 7 8
     */
 
-    return result;
+	return result;
 }
 
 /**
@@ -464,9 +423,9 @@ uint32_t *matrix_add(const uint32_t *matrix_a, const uint32_t *matrix_b)
 uint32_t *matrix_mul(const uint32_t *matrix_a, const uint32_t *matrix_b)
 {
 
-    uint32_t *result = new_matrix();
+	uint32_t *result = new_matrix();
 
-    /*
+	/*
         to do
 
         1 2   1 0    1 2
@@ -476,7 +435,7 @@ uint32_t *matrix_mul(const uint32_t *matrix_a, const uint32_t *matrix_b)
         3 4 x 7 8 => 43 50
     */
 
-    return result;
+	return result;
 }
 
 /**
@@ -485,9 +444,9 @@ uint32_t *matrix_mul(const uint32_t *matrix_a, const uint32_t *matrix_b)
 uint32_t *matrix_pow(const uint32_t *matrix, uint32_t exponent)
 {
 
-    uint32_t *result = new_matrix();
+	uint32_t *result = new_matrix();
 
-    /*
+	/*
         to do
 
         1 2        1 0
@@ -497,7 +456,7 @@ uint32_t *matrix_pow(const uint32_t *matrix, uint32_t exponent)
         3 4 ^ 4 => 435 634
     */
 
-    return result;
+	return result;
 }
 
 ////////////////////////////////
@@ -510,7 +469,7 @@ uint32_t *matrix_pow(const uint32_t *matrix, uint32_t exponent)
 uint32_t get_sum(const uint32_t *matrix)
 {
 
-    /*
+	/*
         to do
 
         1 2
@@ -520,7 +479,7 @@ uint32_t get_sum(const uint32_t *matrix)
         1 1 => 4
     */
 
-    return 0;
+	return 0;
 }
 
 /**
@@ -529,7 +488,7 @@ uint32_t get_sum(const uint32_t *matrix)
 uint32_t get_trace(const uint32_t *matrix)
 {
 
-    /*
+	/*
         to do
 
         1 0
@@ -539,7 +498,7 @@ uint32_t get_trace(const uint32_t *matrix)
         1 2 => 4
     */
 
-    return 0;
+	return 0;
 }
 
 /**
@@ -548,7 +507,7 @@ uint32_t get_trace(const uint32_t *matrix)
 uint32_t get_minimum(const uint32_t *matrix)
 {
 
-    /*
+	/*
         to do
 
         1 2
@@ -558,7 +517,7 @@ uint32_t get_minimum(const uint32_t *matrix)
         2 1 => 1
     */
 
-    return 0;
+	return 0;
 }
 
 /**
@@ -567,7 +526,7 @@ uint32_t get_minimum(const uint32_t *matrix)
 uint32_t get_maximum(const uint32_t *matrix)
 {
 
-    /*
+	/*
         to do
 
         1 2
@@ -577,7 +536,7 @@ uint32_t get_maximum(const uint32_t *matrix)
         2 1 => 4
     */
 
-    return 0;
+	return 0;
 }
 
 /**
@@ -586,7 +545,7 @@ uint32_t get_maximum(const uint32_t *matrix)
 uint32_t get_frequency(const uint32_t *matrix, uint32_t value)
 {
 
-    /*
+	/*
         to do
 
         1 1
@@ -596,5 +555,5 @@ uint32_t get_frequency(const uint32_t *matrix, uint32_t value)
         0 1 :: 2 => 0
     */
 
-    return 0;
+	return 0;
 }
