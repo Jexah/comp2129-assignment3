@@ -1,0 +1,9 @@
+set a = uniform 1
+show a
+set b = uniform 50
+show b
+set c = uniform 6239529
+show c
+set d = uniform -15919532
+show d
+bye

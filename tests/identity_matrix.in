@@ -1,0 +1,9 @@
+set a = identity
+show a
+set b = identity
+show b
+set c = identity
+show c
+set d = identity
+show d
+bye

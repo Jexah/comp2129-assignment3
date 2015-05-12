@@ -1,0 +1,6 @@
+set a = random 5128793
+set b = cloned a
+set c = cloned b
+set d = cloned c
+set e = cloned d
+bye

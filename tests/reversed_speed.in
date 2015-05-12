@@ -1,0 +1,5 @@
+set a = random 5
+set b = reversed a
+set c = reversed b
+set d = reversed c
+bye
