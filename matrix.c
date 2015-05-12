@@ -310,7 +310,7 @@ uint32_t *reversed(register uint32_t *matrix)
 		todo->matrix = matrix;
 		todo->result = result;
 		todo->total = each;
-		pthread_create(thread_ids+i-2, NULL, reverse_worker, todo);
+		pthread_create(thread_ids+i-1, NULL, reverse_worker, todo);
 		matrix -= each;
 		result += each;
 	}
@@ -323,7 +323,7 @@ uint32_t *reversed(register uint32_t *matrix)
 	}
 
 	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;) {
-		pthread_join(thread_ids[threads_waiting - 1], NULL);
+		pthread_join(thread_ids[threads_waiting], NULL);
 	}
 
 	free(thread_ids);
