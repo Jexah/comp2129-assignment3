@@ -322,14 +322,16 @@ uint32_t *reversed(register uint32_t *matrix)
 		*result++ = *matrix--;
 	}
 
-	pthread_barrier_wait(&mybarrier);
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;) {
+		pthread_join(thread_ids[i], NULL);
+	}
 
-	free(thread_ids - g_nthreads);
+	free(thread_ids);
 
 	return result - g_elements;
 }
 // */
- /* No  threads (0.600s)
+/* No  threads (0.600s)
 uint32_t *reversed(register uint32_t *matrix)
 {
 	register uint32_t *result = new_matrix_malloc();
