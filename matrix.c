@@ -308,11 +308,11 @@ uint32_t *reversed(register uint32_t *matrix)
 	{
 		struct reverse_worker_struct *todo = malloc(sizeof(struct reverse_worker_struct));
 		todo->matrix = matrix;
-		matrix -= each;
 		todo->result = result;
-		result += each;
 		todo->total = each;
 		pthread_create(thread_ids++, NULL, reverse_worker, todo);
+		matrix -= each;
+		result += each;
 	}
 
 	register int32_t remaining = g_elements % g_nthreads;
