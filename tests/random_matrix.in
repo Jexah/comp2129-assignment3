@@ -1,0 +1,9 @@
+set a = random 56
+show a
+set b = random 62234
+show b
+set c = random -3582
+show c
+set d = random 827347
+show d
+bye
