@@ -3,5 +3,7 @@
 *.obj
 *.exe
 *.o
+*.out
+*.stats
 !LICENCE
 !Makefile
