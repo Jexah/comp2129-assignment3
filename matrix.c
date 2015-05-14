@@ -297,11 +297,21 @@ static void *reverse_worker(void *arg)
 uint32_t *reversed(register uint32_t *matrix)
 {
 
+	if(g_nthreads == 1)
+	{
+		register uint32_t *result = new_matrix_malloc();
+		register uint32_t i = g_elements;
+		matrix += g_elements - 1;
+		while(i--)
+		{
+			*result++ = *matrix--;
+		}
+		return result - g_elements;
+	}
+
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
 	register uint32_t *result = new_matrix();
 	register uint32_t each = g_elements / g_nthreads;
-	pthread_barrier_t mybarrier;
-	pthread_barrier_init(&mybarrier, NULL, g_nthreads);
 	matrix += g_elements - 1;
 
 	for(register uint32_t i = g_nthreads; i--;)
@@ -330,37 +340,116 @@ uint32_t *reversed(register uint32_t *matrix)
 
 	return result - g_elements;
 }
-// */
-/* No  threads (0.700s)
-uint32_t *reversed(register uint32_t *matrix)
-{
-	register uint32_t *result = new_matrix_malloc();
-	register uint32_t i = g_elements;
-	matrix += g_elements - 1;
-	while(i--)
-	{
-		*result++ = *matrix--;
-	}
-	return result - g_elements;
-}
-// */
 
 /**
  * Returns new transposed matrix
  */
-uint32_t *transposed(const uint32_t* matrix)
+/*
+struct transpose_worker_struct
 {
-	uint32_t *result = new_matrix();
+	uint32_t *matrix;
+	uint32_t *result;
+	uint32_t column_start;
+	uint32_t column_count;
+};
 
-	for (ssize_t y = 0; y < g_height; y++)
+static void *transpose_worker(void *arg)
+{
+	struct transpose_worker_struct *arguments = (struct transpose_worker_struct *)arg;
+	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *result = arguments->result;
+	register uint32_t width = g_width;
+	register uint32_t start_x = arguments->column_start;
+	register uint32_t length_x = arguments->column_count;
+
+	register uint32_t x_width = 0;
+	for(register uint32_t x = length_x; x--;)
 	{
-		for (ssize_t x = 0; x < g_width; x++)
+		register uint32_t actual_x = start_x + x;
+		register uint32_t y_width = 0;
+		for(register uint32_t y = width; y--;)
 		{
-			result[x * g_width + y] = matrix[y * g_width + x];
+			result[y_width + actual_x] = matrix[x_width + y];
+			y_width += width;
 		}
+		x_width += width;
 	}
+	free(arg);
+	return NULL;
+}*/
+
+uint32_t *transposed(register uint32_t* matrix)
+{
+	uint32_t *result = new_matrix_malloc();
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)matrix), *((__m128i *)matrix + 1));
+	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)matrix + 2), *((__m128i *)matrix + 3));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)matrix), *((__m128i *)matrix + 1));
+	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)matrix + 2), *((__m128i *)matrix + 3));
+	*((__m128i *)result) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)result + 1) = _mm_unpackhi_epi64(T0, T1);
+	*((__m128i *)result + 2) = _mm_unpacklo_epi64(T2, T3);
+	*((__m128i *)result + 3) = _mm_unpackhi_epi64(T2, T3);
 
 	return result;
+	/*
+	if(g_nthreads == 1)
+	{
+		uint32_t *result = new_matrix_malloc();
+
+		for (ssize_t y = 0; y < g_height; y++)
+		{
+			for (ssize_t x = 0; x < g_width; x++)
+			{
+				result[x * g_width + y] = matrix[y * g_width + x];
+			}
+		}
+
+		return result;
+	}
+
+	register uint32_t width = g_width;
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+	uint32_t *result = new_matrix();
+	register uint32_t each = width / g_nthreads;
+
+	register uint32_t start = 0;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct transpose_worker_struct *todo = malloc(sizeof(struct transpose_worker_struct));
+		todo->matrix = matrix;
+		todo->result = result;
+		todo->column_start = start;
+		todo->column_count = each;
+		pthread_create(thread_ids+i, NULL, transpose_worker, todo);
+		start += each;
+	}
+
+	register uint32_t remaining = width % g_nthreads;
+	start = width - remaining;
+
+	register uint32_t x_width = 0;
+	for(register uint32_t x = remaining; x--;)
+	{
+		register uint32_t actual_x = start + x;
+		register uint32_t y_width = 0;
+		for(register uint32_t y = width; y--;)
+		{
+			result[y_width + actual_x] = matrix[x_width + y];
+			y_width += width;
+		}
+		x_width += width;
+	}
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;) {
+		pthread_join(thread_ids[threads_waiting], NULL);
+	}
+
+	free(thread_ids);
+
+
+	return result;
+
+	*/
 }
 
 /**

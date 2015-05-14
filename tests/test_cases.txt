@@ -1,0 +1,3 @@
+time ./matrix 10000 4 < tests/reversed.in
+time /labcommon/comp2129/bin/matrix 10000 4 < tests/reversed.in
+
