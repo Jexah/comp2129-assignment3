@@ -927,7 +927,7 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 		{
 			cached_results[curr_loop] = curr_result;
 		}
-		else if(previous_result != matrix || ~(exponent & 1))
+		else if(previous_result != matrix)
 		{
 			free(previous_result);
 		}
@@ -949,7 +949,7 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 
 	for(register uint32_t i = 32; i--;)
 	{
-		if(cached_results[i] && cached_results[i] != previous_result)
+		if(cached_results[i] && (uint32_t *)(cached_results + i) != previous_result)
 		{
 			free(cached_results[i]);
 		}

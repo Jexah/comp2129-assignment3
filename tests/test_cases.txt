@@ -18,7 +18,11 @@ vi -d <(./matrix 1000 4 < tests/transposed.in) <(/labcommon/comp2129/bin/matrix 
 vi -d <(./matrix 100 4 < tests/matrix_mul.in) <(/labcommon/comp2129/bin/matrix 100 4 < tests/matrix_mul.in)
 
 
-vi -d <(./matrix 100 1 < tests/matrix_add.in) <(/labcommon/comp2129/bin/matrix 100 1 < tests/matrix_add.in)
+vi -d <(./matrix 100 4 < tests/matrix_add.in) <(/labcommon/comp2129/bin/matrix 100 4 < tests/matrix_add.in)
 
 
 time ./matrix 10000 1 < tests/matrix_add_speed.in
+
+
+time ./matrix 10000 4 < tests/matrix_add_speed.in
+time /labcommon/comp2129/bin/matrix 10000 4 < tests/matrix_add_speed.in

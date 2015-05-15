@@ -1,0 +1,5 @@
+set a = random 5
+set b = matrix#pow a 2
+set c = matrix#pow b 6
+set d = matrix#pow c 19
+bye

@@ -1,0 +1,9 @@
+set a = random 5
+show a
+set b = matrix#pow a 2
+show b
+set c = matrix#pow b 6
+show c
+set d = matrix#pow c 19
+show d
+bye
