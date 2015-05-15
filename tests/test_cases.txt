@@ -7,6 +7,10 @@ time ./matrix 10000 4 < tests/scalar_add_speed.in
 time ./matrix 10000 1 < tests/scalar_mul_speed.in
 time ./matrix 10000 4 < tests/scalar_mul_speed.in
 
+time ./matrix 1000 1 < tests/transposed_speed.in
+time ./matrix 10000 1 < tests/transposed_speed.in
+time ./matrix 10000 4 < tests/transposed_speed.in
+
 time /labcommon/comp2129/bin/matrix 10000 1 < tests/scalar_add_speed.in
 time /labcommon/comp2129/bin/matrix 10000 4 < tests/scalar_add_speed.in
 

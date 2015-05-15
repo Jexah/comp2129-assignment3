@@ -28,8 +28,8 @@ uint32_t* transposed(register uint32_t* matrix);
 uint32_t* scalar_add(register uint32_t* matrix, const register uint32_t scalar);
 uint32_t* scalar_mul(register uint32_t* matrix, const register uint32_t scalar);
 uint32_t* matrix_add(const uint32_t* matrix_a, const uint32_t* matrix_b);
-uint32_t* matrix_mul(const uint32_t* matrix_a, const uint32_t* matrix_b);
-uint32_t* matrix_pow(const uint32_t* matrix, uint32_t exponent);
+uint32_t* matrix_mul(register uint32_t* matrix_a, register uint32_t* matrix_b);
+uint32_t* matrix_pow(uint32_t* matrix, const uint32_t exponent);
 
 /* compute operations */
 

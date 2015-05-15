@@ -1,0 +1,6 @@
+set a = random 5128793
+set b = transposed a
+set c = transposed b
+set d = transposed c
+set e = transposed d
+bye
