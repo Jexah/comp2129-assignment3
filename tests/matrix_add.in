@@ -1,0 +1,9 @@
+set a = random 5
+show a
+set b = matrix#add a a
+show b
+set c = matrix#add a b
+show c
+set d = matrix#add b c
+show d
+bye
