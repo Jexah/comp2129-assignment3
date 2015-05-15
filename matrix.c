@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <inttypes.h>
 #include <string.h>
+#include <smmintrin.h>
 #include <immintrin.h>
 
 #include "matrix.h"
