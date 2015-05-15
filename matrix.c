@@ -335,7 +335,7 @@ uint32_t *reversed(register uint32_t *matrix)
 		todo->matrix = matrix;
 		todo->result = result;
 		todo->total = each;
-		pthread_create(thread_ids+i, NULL, reverse_worker, todo);
+		pthread_create(thread_ids + i, NULL, reverse_worker, todo);
 		matrix -= each;
 		result += each;
 	}
@@ -649,7 +649,7 @@ uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t scalar)
 		todo->result = result;
 		todo->scalar = scalar;
 		todo->total = each;
-		pthread_create(thread_ids+i, NULL, scalar_mul_worker, todo);
+		pthread_create(thread_ids + i, NULL, scalar_mul_worker, todo);
 		matrix += each;
 		result += each;
 	}
@@ -749,11 +749,12 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 	}
 
 	register uint32_t *result = new_matrix_malloc();
-	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
 	register uint32_t tile_width = g_hard_width >> 2;
 	register uint32_t each = tile_width / g_nthreads;
 
-	uint32_t curr_row = tile_width;
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+
+	uint32_t curr_row = tile_width - 1;
 	for(register uint32_t i = g_nthreads; i--;)
 	{
 		struct matrix_add_worker_struct *todo = malloc(sizeof(struct matrix_add_worker_struct));
