@@ -694,6 +694,7 @@ inline static void add_4x4(uint32_t *input_a, uint32_t *input_b, uint32_t *outpu
 	*((__m128i *)(output + offset + g_hard_width * 2)) = t3;
 	*((__m128i *)(output + offset + g_hard_width * 3)) = t4;
 }
+
 struct matrix_add_worker_struct
 {
 	uint32_t *matrix_a;
@@ -708,19 +709,18 @@ static void *matrix_add_worker(void *arg)
 	struct matrix_add_worker_struct *options = (struct matrix_add_worker_struct *)arg;
 	register uint32_t *matrix_a = options->matrix_a;
 	register uint32_t *matrix_b = options->matrix_b;
+	register uint32_t num_rows = options->num_rows;
 	register uint32_t *result = options->result;
+	register uint32_t curr_y = options->starting_row;
+	register uint32_t tile_width = g_hard_width >> 2;
 
-	for(uint32_t y = options->starting_row; y--;)
+	for(register uint32_t y = num_rows; y--;)
 	{
-		for(uint32_t x = g_soft_width; x--;)
+		for(register uint32_t x = tile_width; x--;)
 		{
-			uint32_t total = 0;
-			for(uint32_t z = g_soft_width; z--;)
-			{
-				total += matrix_a[y * g_hard_width + z] * matrix_b[x * g_hard_width + z];
-			}
-			result[y * g_hard_width + x] = total;
+			add_4x4(matrix_a, matrix_b, result, x, curr_y);
 		}
+		curr_y--;
 	}
 
 	free(arg);
@@ -731,7 +731,7 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 {
 	// Matrix has multiple of 16 elements, 420 blazeit
 
-	if(g_nthreads == 1 || g_hard_width < 2000)
+	if(g_nthreads == 1)
 	{
 		// Only one thread or size is too small, just do it.
 
@@ -749,10 +749,11 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 	}
 
 	register uint32_t *result = new_matrix_malloc();
-	register uint32_t each = g_soft_height / g_nthreads;
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+	register uint32_t tile_width = g_hard_width >> 2;
+	register uint32_t each = tile_width / g_nthreads;
 
-	uint32_t curr_row = g_soft_height;
+	uint32_t curr_row = tile_width;
 	for(register uint32_t i = g_nthreads; i--;)
 	{
 		struct matrix_add_worker_struct *todo = malloc(sizeof(struct matrix_add_worker_struct));
@@ -765,7 +766,6 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 		curr_row -= each;
 	}
 
-	register uint32_t tile_width = g_hard_width >> 2;
 	for(register uint32_t y = curr_row; y--;)
 	{
 		for(register uint32_t x = tile_width; x--;)
@@ -982,6 +982,94 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 /**
  * Returns the sum of all elements
  */
+inline static uint32_t get_sum_4x4(uint32_t *input_a, uint32_t x_offset, uint32_t y_offset)
+{
+	// Magic number 4 is the size of the matrix to add
+	uint32_t offset = 4 * x_offset + 4 * g_hard_width * y_offset;
+	__m128i sum1 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 0)), *((__m128i *)(input_a + offset + g_hard_width * 1)));
+	__m128i sum2 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 2)), *((__m128i *)(input_a + offset + g_hard_width * 3)));
+	__m128i sum3 = _mm_add_epi32(sum1, sum2);
+
+	return *(uint32_t *)(&sum3 + 0) + *(uint32_t *)(&sum3 + 1) + *(uint32_t *)(&sum3 + 2) + *(uint32_t *)(&sum3 + 3);
+}
+/*
+struct get_sum_worker_struct
+{
+	uint32_t *matrix_a;
+	uint32_t *result;
+	uint32_t num_rows;
+	uint32_t starting_row;
+};
+
+static void *get_sum_worker(void *arg)
+{
+	//struct get_sum_worker_struct *options = (struct get_sum_worker_struct *)arg;
+
+	free(arg);
+	return NULL;
+}
+
+uint32_t *get_sum(register uint32_t *matrix_a, register uint32_t *matrix_b)
+{
+	// Matrix has multiple of 16 elements, 420 blazeit
+
+	if(g_nthreads == 1)
+	{
+		// Only one thread or size is too small, just do it.
+
+		uint32_t *result = new_matrix_malloc();
+		uint32_t tile_width = g_hard_width >> 2;
+
+		for(
+		for(register uint32_t y = tile_width; y--;)
+		{
+			for(register uint32_t x = tile_width; x--;)
+			{
+				add_4x4(matrix_a, matrix_b, result, x, y);
+			}
+		}
+
+		return result;
+	}
+
+	register uint32_t *result = new_matrix_malloc();
+	register uint32_t each = g_soft_height / g_nthreads;
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+
+	uint32_t curr_row = g_soft_height;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct matrix_add_worker_struct *todo = malloc(sizeof(struct matrix_add_worker_struct));
+		todo->matrix_a = matrix_a;
+		todo->matrix_b = matrix_b;
+		todo->result = result;
+		todo->num_rows = each;
+		todo->starting_row = curr_row;
+		pthread_create(thread_ids + i, NULL, matrix_add_worker, todo);
+		curr_row -= each;
+	}
+
+	register uint32_t tile_width = g_hard_width >> 2;
+	for(register uint32_t y = curr_row; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			add_4x4(matrix_a, matrix_b, result, x, y);
+		}
+	}
+
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
+	{
+		pthread_join(thread_ids[threads_waiting], NULL);
+	}
+
+	free(thread_ids);
+
+	return result;
+
+}
+*/
 uint32_t get_sum(const uint32_t *matrix)
 {
 
