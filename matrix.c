@@ -371,35 +371,11 @@ struct transpose_worker_struct
 {
 	uint32_t *matrix;
 	uint32_t *result;
-	uint32_t num_tiles;
-	uint32_t offset;
+	uint32_t num_rows;
+	uint32_t starting_row;
 };
-/*
-static void *transpose_worker(void *arg)
-{
-	struct transpose_worker_struct *arguments = (struct transpose_worker_struct *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	register uint32_t *result = arguments->result;
-	register uint32_t width = g_soft_width;
-	register uint32_t start_x = arguments->column_start;
-	register uint32_t length_x = arguments->column_count;
 
-	register uint32_t x_width = 0;
-	for(register uint32_t x = length_x; x--;)
-	{
-		register uint32_t actual_x = start_x + x;
-		register uint32_t y_width = 0;
-		for(register uint32_t y = width; y--;)
-		{
-			result[y_width + actual_x] = matrix[x_width + y];
-			y_width += width;
-		}
-		x_width += width;
-	}
-	free(arg);
-	return NULL;
-}
-*/
+
 inline static void transpose_4x4(uint32_t *input, uint32_t *output, uint32_t x_offset, uint32_t y_offset)
 {
 	// Magic number 4 is the size of the matrix to transpose
@@ -427,10 +403,35 @@ inline static void transpose_4x4(uint32_t *input, uint32_t *output, uint32_t x_o
 	*((__m128i *)(output_plus_offset + width2)) = _mm_unpacklo_epi64(T2, T3);
 	*((__m128i *)(output_plus_offset + width3)) = _mm_unpackhi_epi64(T2, T3);
 }
+
+static void *transpose_worker(void *arg)
+{
+	struct transpose_worker_struct *arguments = (struct transpose_worker_struct *)arg;
+	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *result = arguments->result;
+	register uint32_t num_rows = arguments->num_rows;
+	register uint32_t curr_y = arguments->starting_row;
+
+	while(num_rows--)
+	{
+		register uint32_t curr_x = 0;
+		register uint32_t todo_x = g_hard_width >> 2;
+		while(todo_x--)
+		{
+			transpose_4x4(matrix, result, curr_x++, curr_y);
+		}
+		curr_y++;
+	}
+
+	free(arg);
+	return NULL;
+}
 uint32_t *transposed(register uint32_t* matrix)
 {
 
-	if(g_nthreads == 1 || g_hard_width < 500)
+	register uint32_t tile_width = g_hard_width >> 2;
+	register uint32_t total_tiles = tile_width * tile_width;
+	if(g_nthreads == 1 || g_hard_width < 2000 || g_nthreads > total_tiles)
 	{
 		// Only one thread or size is too small, just do it.
 		uint32_t *result = new_matrix_malloc();
@@ -447,45 +448,39 @@ uint32_t *transposed(register uint32_t* matrix)
 
 		return result;
 	}
-	/*
+
 	// Loads of threads, make them do stuff!
 
 	uint32_t *result = new_matrix_malloc();
 
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
-	register uint32_t tile_width = g_hard_width >> 2;
 	register uint32_t each = tile_width / g_nthreads;
 
 	register uint32_t start = 0;
 	for(register uint32_t i = g_nthreads; i--;)
 	{
-		for(register uint32_t j = tile_width; j--;)
-		{
-
-		}
 		struct transpose_worker_struct *todo = malloc(sizeof(struct transpose_worker_struct));
 		todo->matrix = matrix;
 		todo->result = result;
-		todo->column_start = start;
-		todo->column_count = each;
-		pthread_create(thread_ids+i, NULL, transpose_worker, todo);
+		todo->num_rows = each;
+		todo->starting_row = start;
+		pthread_create(thread_ids + i, NULL, transpose_worker, todo);
 		start += each;
 	}
 
-	register uint32_t remaining = width % g_nthreads;
-	start = width - remaining;
+	register uint32_t remaining = tile_width % g_nthreads;
 
-	register uint32_t x_width = 0;
-	for(register uint32_t x = remaining; x--;)
+	register uint32_t todo_x = tile_width;
+	register uint32_t curr_y = start;
+	register uint32_t curr_x;
+	while(remaining--)
 	{
-		register uint32_t actual_x = start + x;
-		register uint32_t y_width = 0;
-		for(register uint32_t y = width; y--;)
+		curr_x = 0;
+		while(todo_x--)
 		{
-			result[y_width + actual_x] = matrix[x_width + y];
-			y_width += width;
+			transpose_4x4(matrix, result, curr_x++, curr_y);
 		}
-		x_width += width;
+		curr_y++;
 	}
 
 	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
@@ -497,9 +492,6 @@ uint32_t *transposed(register uint32_t* matrix)
 
 
 	return result;
-	*/
-
-	return NULL;
 }
 
 /**
