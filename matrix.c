@@ -689,10 +689,10 @@ inline static void add_4x4(uint32_t *input_a, uint32_t *input_b, uint32_t *outpu
 	__m128i t3 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 2)), *((__m128i *)(input_b + offset + g_hard_width * 2)));
 	__m128i t4 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 3)), *((__m128i *)(input_b + offset + g_hard_width * 3)));
 
-	*((__m128i *)(output + g_hard_width * 0)) = t1;
-	*((__m128i *)(output + g_hard_width * 1)) = t2;
-	*((__m128i *)(output + g_hard_width * 2)) = t3;
-	*((__m128i *)(output + g_hard_width * 3)) = t4;
+	*((__m128i *)(output + offset + g_hard_width * 0)) = t1;
+	*((__m128i *)(output + offset + g_hard_width * 1)) = t2;
+	*((__m128i *)(output + offset + g_hard_width * 2)) = t3;
+	*((__m128i *)(output + offset + g_hard_width * 3)) = t4;
 }
 
 uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
@@ -704,7 +704,6 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 		// Only one thread or size is too small, just do it.
 
 		uint32_t *result = new_matrix_malloc();
-
 		uint32_t tile_width = g_hard_width >> 2;
 
 		for(register uint32_t y = tile_width; y--;)
