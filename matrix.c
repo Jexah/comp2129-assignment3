@@ -938,7 +938,7 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 
 	for(register uint32_t i = 32; i--;)
 	{
-		if(cached_results[i])
+		if(cached_results[i] && previous_result != (uint32_t *)(cached_results + i))
 		{
 			uint32_t *new_result = matrix_mul(previous_result, cached_results[i]);
 			free(previous_result);
