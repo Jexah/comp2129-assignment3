@@ -767,12 +767,14 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 		curr_row -= each;
 	}
 
-	for(register uint32_t y = curr_row; y--;)
+	register uint32_t curr_y = curr_row;
+	for(register uint32_t y = tile_width % g_nthreads; y--;)
 	{
 		for(register uint32_t x = tile_width; x--;)
 		{
-			add_4x4(matrix_a, matrix_b, result, x, y);
+			add_4x4(matrix_a, matrix_b, result, x, curr_y);
 		}
+		curr_y--;
 	}
 
 
