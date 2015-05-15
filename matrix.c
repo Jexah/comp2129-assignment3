@@ -694,6 +694,38 @@ inline static void add_4x4(uint32_t *input_a, uint32_t *input_b, uint32_t *outpu
 	*((__m128i *)(output + offset + g_hard_width * 2)) = t3;
 	*((__m128i *)(output + offset + g_hard_width * 3)) = t4;
 }
+struct matrix_add_worker_struct
+{
+	uint32_t *matrix_a;
+	uint32_t *matrix_b;
+	uint32_t *result;
+	uint32_t num_rows;
+	uint32_t starting_row;
+};
+
+static void *matrix_add_worker(void *arg)
+{
+	struct matrix_add_worker_struct *options = (struct matrix_add_worker_struct *)arg;
+	register uint32_t *matrix_a = options->matrix_a;
+	register uint32_t *matrix_b = options->matrix_b;
+	register uint32_t *result = options->result;
+
+	for(uint32_t y = options->starting_row; y--;)
+	{
+		for(uint32_t x = g_soft_width; x--;)
+		{
+			uint32_t total = 0;
+			for(uint32_t z = g_soft_width; z--;)
+			{
+				total += matrix_a[y * g_hard_width + z] * matrix_b[x * g_hard_width + z];
+			}
+			result[y * g_hard_width + x] = total;
+		}
+	}
+
+	free(arg);
+	return NULL;
+}
 
 uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 {
@@ -713,12 +745,44 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 				add_4x4(matrix_a, matrix_b, result, x, y);
 			}
 		}
-
 		return result;
 	}
 
-	//
-	return NULL;
+	register uint32_t *result = new_matrix_malloc();
+	register uint32_t each = g_soft_height / g_nthreads;
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+
+	uint32_t curr_row = g_soft_height;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct matrix_add_worker_struct *todo = malloc(sizeof(struct matrix_add_worker_struct));
+		todo->matrix_a = matrix_a;
+		todo->matrix_b = matrix_b;
+		todo->result = result;
+		todo->num_rows = each;
+		todo->starting_row = curr_row;
+		pthread_create(thread_ids + i, NULL, matrix_add_worker, todo);
+		curr_row -= each;
+	}
+
+	register uint32_t tile_width = g_hard_width >> 2;
+	for(register uint32_t y = curr_row; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			add_4x4(matrix_a, matrix_b, result, x, y);
+		}
+	}
+
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
+	{
+		pthread_join(thread_ids[threads_waiting], NULL);
+	}
+
+	free(thread_ids);
+
+	return result;
 
 }
 
