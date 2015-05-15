@@ -310,7 +310,7 @@ uint32_t *reversed(register uint32_t *matrix)
 	}
 
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
-	register uint32_t *result = new_matrix();
+	register uint32_t *result = new_matrix_malloc();
 	register uint32_t each = g_elements / g_nthreads;
 	matrix += g_elements - 1;
 
@@ -378,8 +378,9 @@ static void *transpose_worker(void *arg)
 	return NULL;
 }*/
 
-inline static void transpose(uint32_t *input, uint32_t *output, uint32_t x_offset, uint32_t y_offset)
+inline static void transpose_4x4(uint32_t *input, uint32_t *output, uint32_t x_offset, uint32_t y_offset)
 {
+	// Magic number 4 is the size of the matrix to transpose
 	register uint32_t width = g_width;
 	register uint32_t input_offset = 4 * x_offset + 4 * width * y_offset;
 	register uint32_t output_offset = 4 * width * x_offset + 4 * y_offset;
@@ -393,43 +394,74 @@ inline static void transpose(uint32_t *input, uint32_t *output, uint32_t x_offse
 	*((__m128i *)(output + width * 3 + output_offset)) = _mm_unpackhi_epi64(T2, T3);
 }
 
-inline static void transpose_simple(uint32_t *input, uint32_t *output)
+inline static void transpose_4x4_addition(uint32_t *input, uint32_t *output, uint32_t x_offset, uint32_t y_offset)
+{
+	// Magic number 4 is the size of the matrix to transpose
+	register uint32_t width = g_width;
+	register uint32_t width2 = width + width;
+	register uint32_t width3 = width + width + width;
+
+	uint32_t input_offset = 4 * x_offset + 4 * width * y_offset;
+	uint32_t output_offset = 4 * width * x_offset + 4 * y_offset;
+
+	register uint32_t *input_plus_offset = input + input_offset;
+	register uint32_t *input_plus_offset_1 = input_plus_offset + width;
+	register uint32_t *input_plus_offset_2 = input_plus_offset + width2;
+	register uint32_t *input_plus_offset_3 = input_plus_offset + width3;
+
+	register uint32_t *output_plus_offset = output + output_offset;
+
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)(input_plus_offset  )), *((__m128i *)(input_plus_offset_1)));
+	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)(input_plus_offset_2)), *((__m128i *)(input_plus_offset_3)));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)(input_plus_offset  )), *((__m128i *)(input_plus_offset_1)));
+	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)(input_plus_offset_2)), *((__m128i *)(input_plus_offset_3)));
+
+	*((__m128i *)(output_plus_offset         )) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)(output_plus_offset + width )) = _mm_unpackhi_epi64(T0, T1);
+	*((__m128i *)(output_plus_offset + width2)) = _mm_unpacklo_epi64(T2, T3);
+	*((__m128i *)(output_plus_offset + width3)) = _mm_unpackhi_epi64(T2, T3);
+}
+/*
+inline static void transpose_4x4_super_simple_offset(uint32_t *input, uint32_t *output, uint32_t x_offset, uint32_t y_offset)
 {
 	register uint32_t width = g_width;
-	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)(input            )), *((__m128i *)(input + width    )));
-	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)(input + width * 2)), *((__m128i *)(input + width * 3)));
-	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)(input            )), *((__m128i *)(input + width    )));
-	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)(input + width * 2)), *((__m128i *)(input + width * 3)));
-	*((__m128i *)(output            )) = _mm_unpacklo_epi64(T0, T1);
-	*((__m128i *)(output + width    )) = _mm_unpackhi_epi64(T0, T1);
-	*((__m128i *)(output + width * 2)) = _mm_unpacklo_epi64(T2, T3);
-	*((__m128i *)(output + width * 3)) = _mm_unpackhi_epi64(T2, T3);
-}
+	register uint32_t width2 = width + width;
+	register uint32_t width3 = width + width + width;
 
-inline static void transpose_super_simple(uint32_t *input, uint32_t *output)
-{
-	register uint32_t width = g_width;
-	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)(input            )), *((__m128i *)(input + 4    )));
-	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)(input + 8)), *((__m128i *)(input + 12 )));
-	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)(input            )), *((__m128i *)(input + 4    )));
-	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)(input + 8)), *((__m128i *)(input + 12)));
-	*((__m128i *)(output            )) = _mm_unpacklo_epi64(T0, T1);
-	*((__m128i *)(output + width    )) = _mm_unpackhi_epi64(T0, T1);
-	*((__m128i *)(output + width * 2)) = _mm_unpacklo_epi64(T2, T3);
-	*((__m128i *)(output + width * 3)) = _mm_unpackhi_epi64(T2, T3);
-}
+	uint32_t input_offset = 4 * x_offset + 4 * width * y_offset;
+	uint32_t output_offset = 4 * width * x_offset + 4 * y_offset;
 
-inline static void transpose_super_simple_2(uint32_t *input, uint32_t *output)
-{
-	//register uint32_t width = g_width;
-	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)input), *((__m128i *)input + 1));
+	register uint32_t *input_plus_offset = input + input_offset;
+	register uint32_t *input_plus_offset_1 = input_plus_offset + width;
+	register uint32_t *input_plus_offset_2 = input_plus_offset + width2;
+	register uint32_t *input_plus_offset_3 = input_plus_offset + width3;
+
+	register uint32_t *output_plus_offset = output + output_offset;
+
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)input    ), *((__m128i *)input + 1));
 	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)input + 2), *((__m128i *)input + 3));
-	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)input), *((__m128i *)input + 1));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)input    ), *((__m128i *)input + 1));
 	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)input + 2), *((__m128i *)input + 3));
-	*((__m128i *)output) = _mm_unpacklo_epi64(T0, T1);
-	*((__m128i *)output + 1) = _mm_unpackhi_epi64(T0, T1);
+
+	*((__m128i *)output         ) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)output + 1 ) = _mm_unpackhi_epi64(T0, T1);
 	*((__m128i *)output + 2) = _mm_unpacklo_epi64(T2, T3);
 	*((__m128i *)output + 3) = _mm_unpackhi_epi64(T2, T3);
+}
+*/
+inline static void transpose_4x4_super_simple(uint32_t *input, uint32_t *output)
+{
+	register uint32_t width = g_width;
+
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)(input    )), *((__m128i *)(input + width)));
+	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)(input + 2 * width)), *((__m128i *)(input + 3 * width)));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)(input    )), *((__m128i *)(input + width)));
+	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)(input + 2 * width)), *((__m128i *)(input + 3 * width)));
+
+	*((__m128i *)(output     )) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)(output + width)) = _mm_unpackhi_epi64(T0, T1);
+	*((__m128i *)(output + width * 2)) = _mm_unpacklo_epi64(T2, T3);
+	*((__m128i *)(output + width * 3)) = _mm_unpackhi_epi64(T2, T3);
 }
 
 uint32_t *transposed(register uint32_t* matrix)
@@ -445,10 +477,9 @@ uint32_t *transposed(register uint32_t* matrix)
 		{
 			transpose(matrix, result, tile_x, tile_y);
 		}
-	}
+	}*/
 
-	transpose(matrix, result, 1, 0);
-
+	transpose_4x4_addition(matrix, result, 0, 0);
 
 
 	return result;
@@ -516,43 +547,145 @@ uint32_t *transposed(register uint32_t* matrix)
 /**
  * Returns new matrix with scalar added to each element
  */
-uint32_t *scalar_add(const uint32_t *matrix, uint32_t scalar)
+struct scalar_add_worker_struct
+{
+	uint32_t *result;
+	uint32_t *matrix;
+	uint32_t scalar;
+	uint32_t total;
+};
+
+static void *scalar_add_worker(void *arg)
+{
+	struct scalar_add_worker_struct *arguments = (struct scalar_add_worker_struct *)arg;
+	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *result = arguments->result;
+	register uint32_t scalar = arguments->scalar;
+	register uint32_t total = arguments->total;
+	while(total--)
+	{
+		*result++ = *matrix++ + scalar;
+	}
+	free(arg);
+	return NULL;
+}
+
+uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
 {
 
-	uint32_t *result = new_matrix();
+	if(g_nthreads == 1)
+	{
+		register uint32_t *result = new_matrix_malloc();
+		register uint32_t i = g_elements;
+		while(i--)
+		{
+			*result++ = *matrix++ + scalar;
+		}
+		return result - g_elements;
+	}
 
-	/*
-        to do
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+	register uint32_t *result = new_matrix_malloc();
+	register uint32_t each = g_elements / g_nthreads;
 
-        1 0        2 1
-        0 1 + 1 => 1 2
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct scalar_add_worker_struct *todo = malloc(sizeof(struct scalar_add_worker_struct));
+		todo->matrix = matrix;
+		todo->result = result;
+		todo->scalar = scalar;
+		todo->total = each;
+		pthread_create(thread_ids+i, NULL, scalar_add_worker, todo);
+		matrix += each;
+		result += each;
+	}
 
-        1 2        5 6
-        3 4 + 4 => 7 8
-    */
+	register uint32_t remaining = g_elements % g_nthreads;
 
-	return result;
+	while(remaining--)
+	{
+		*result++ = *matrix++ + scalar;
+	}
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;) {
+		pthread_join(thread_ids[threads_waiting], NULL);
+	}
+
+	free(thread_ids);
+
+	return result - g_elements;
 }
 
 /**
  * Returns new matrix with scalar multiplied to each element
  */
-uint32_t *scalar_mul(const uint32_t *matrix, uint32_t scalar)
+struct scalar_mul_worker_struct
+{
+	uint32_t *result;
+	uint32_t *matrix;
+	uint32_t scalar;
+	uint32_t total;
+};
+
+static void *scalar_mul_worker(void *arg)
+{
+	struct scalar_mul_worker_struct *arguments = (struct scalar_mul_worker_struct *)arg;
+	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *result = arguments->result;
+	register uint32_t scalar = arguments->scalar;
+	register uint32_t total = arguments->total;
+	while(total--)
+	{
+		*result++ = *matrix++ * scalar;
+	}
+	free(arg);
+	return NULL;
+}
+
+uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t scalar)
 {
 
-	uint32_t *result = new_matrix();
+	if(g_nthreads == 1)
+	{
+		register uint32_t *result = new_matrix_malloc();
+		register uint32_t i = g_elements;
+		while(i--)
+		{
+			*result++ = *matrix++ * scalar;
+		}
+		return result - g_elements;
+	}
 
-	/*
-        to do
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+	register uint32_t *result = new_matrix_malloc();
+	register uint32_t each = g_elements / g_nthreads;
 
-        1 0        2 0
-        0 1 x 2 => 0 2
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct scalar_mul_worker_struct *todo = malloc(sizeof(struct scalar_mul_worker_struct));
+		todo->matrix = matrix;
+		todo->result = result;
+		todo->scalar = scalar;
+		todo->total = each;
+		pthread_create(thread_ids+i, NULL, scalar_mul_worker, todo);
+		matrix += each;
+		result += each;
+	}
 
-        1 2        2 4
-        3 4 x 2 => 6 8
-    */
+	register uint32_t remaining = g_elements % g_nthreads;
 
-	return result;
+	while(remaining--)
+	{
+		*result++ = *matrix++ * scalar;
+	}
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;) {
+		pthread_join(thread_ids[threads_waiting], NULL);
+	}
+
+	free(thread_ids);
+
+	return result - g_elements;
 }
 
 /**

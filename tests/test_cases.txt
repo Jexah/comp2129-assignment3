@@ -1,3 +1,12 @@
 time ./matrix 10000 4 < tests/reversed.in
 time /labcommon/comp2129/bin/matrix 10000 4 < tests/reversed.in
 
+time ./matrix 10000 1 < tests/scalar_add_speed.in
+time ./matrix 10000 4 < tests/scalar_add_speed.in
+
+time ./matrix 10000 1 < tests/scalar_mul_speed.in
+time ./matrix 10000 4 < tests/scalar_mul_speed.in
+
+time /labcommon/comp2129/bin/matrix 10000 1 < tests/scalar_add_speed.in
+time /labcommon/comp2129/bin/matrix 10000 4 < tests/scalar_add_speed.in
+

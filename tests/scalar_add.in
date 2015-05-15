@@ -1,0 +1,10 @@
+set a = random 5
+set b = scalar#add a 1
+show b
+set c = scalar#add a 1234
+show c
+set d = scalar#add a -5325
+show d
+set e = scalar#add d 15932741
+show d
+bye

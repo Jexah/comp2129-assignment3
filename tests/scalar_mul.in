@@ -1,0 +1,10 @@
+set a = random 5
+set b = scalar#mul a 2
+show b
+set c = scalar#mul a 50
+show c
+set d = scalar#mul c 124951
+show d
+set e = scalar#mul d -159251151
+show e
+bye
