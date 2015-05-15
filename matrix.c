@@ -409,14 +409,12 @@ static void *transpose_worker(void *arg)
 	struct transpose_worker_struct *arguments = (struct transpose_worker_struct *)arg;
 	register uint32_t *matrix = arguments->matrix;
 	register uint32_t *result = arguments->result;
-	register uint32_t num_rows = arguments->num_rows;
 	register uint32_t curr_y = arguments->starting_row;
 
-	while(num_rows--)
+	for(register uint32_t num_rows = arguments->num_rows; num_rows--;)
 	{
 		register uint32_t curr_x = 0;
-		register uint32_t todo_x = g_hard_width >> 2;
-		while(todo_x--)
+		for(register uint32_t todo_x = g_hard_width >> 2; todo_x--;)
 		{
 			transpose_4x4(matrix, result, curr_x++, curr_y);
 		}
@@ -430,8 +428,7 @@ uint32_t *transposed(register uint32_t* matrix)
 {
 
 	register uint32_t tile_width = g_hard_width >> 2;
-	register uint32_t total_tiles = tile_width * tile_width;
-	if(g_nthreads == 1 || g_hard_width < 2000 || g_nthreads > total_tiles)
+	if(g_nthreads == 1 || g_hard_width < 2000)
 	{
 		// Only one thread or size is too small, just do it.
 		uint32_t *result = new_matrix_malloc();
@@ -468,15 +465,11 @@ uint32_t *transposed(register uint32_t* matrix)
 		start += each;
 	}
 
-	register uint32_t remaining = tile_width % g_nthreads;
-
-	register uint32_t todo_x = tile_width;
 	register uint32_t curr_y = start;
-	register uint32_t curr_x;
-	while(remaining--)
+	for(register uint32_t remaining = tile_width % g_nthreads; remaining--;)
 	{
-		curr_x = 0;
-		while(todo_x--)
+		register uint32_t curr_x = 0;
+		for(register uint32_t todo_x = tile_width; todo_x--;)
 		{
 			transpose_4x4(matrix, result, curr_x++, curr_y);
 		}
@@ -687,30 +680,42 @@ uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t scalar)
 /**
  * Returns new matrix with elements added at the same index
  */
-uint32_t *matrix_add(register const uint32_t *matrix_a, register const uint32_t *matrix_b)
+inline static void add_4x4(uint32_t *input_a, uint32_t *input_b, uint32_t *output, uint32_t x_offset, uint32_t y_offset)
+{
+	// Magic number 4 is the size of the matrix to add
+	uint32_t offset = 4 * x_offset + 4 * g_hard_width * y_offset;
+	__m128i t1 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 0)), *((__m128i *)(input_b + offset + g_hard_width * 0)));
+	__m128i t2 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 1)), *((__m128i *)(input_b + offset + g_hard_width * 1)));
+	__m128i t3 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 2)), *((__m128i *)(input_b + offset + g_hard_width * 2)));
+	__m128i t4 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 3)), *((__m128i *)(input_b + offset + g_hard_width * 3)));
+
+	*((__m128i *)(output + g_hard_width * 0)) = t1;
+	*((__m128i *)(output + g_hard_width * 1)) = t2;
+	*((__m128i *)(output + g_hard_width * 2)) = t3;
+	*((__m128i *)(output + g_hard_width * 3)) = t4;
+}
+
+uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 {
 	// Matrix has multiple of 16 elements, 420 blazeit
-	if(g_nthreads == 1)
+
+	if(g_nthreads == 1 || g_hard_width < 2000)
 	{
-		// Only one thread, don't bother creating a new one, just solve.
+		// Only one thread or size is too small, just do it.
 
-		// TODO:
-		// 	CURRENTLY ONLY SOLVES 4x4 MATRIX, MUST ADAPT FOR MORE
-		uint32_t *output = new_matrix_malloc();
+		uint32_t *result = new_matrix_malloc();
 
-		__m128i t1 = _mm_add_epi32(*((__m128i *)matrix_a++), *((__m128i *)matrix_b++));
-		__m128i t2 = _mm_add_epi32(*((__m128i *)matrix_a++), *((__m128i *)matrix_b++));
-		__m128i t3 = _mm_add_epi32(*((__m128i *)matrix_a++), *((__m128i *)matrix_b++));
-		__m128i t4 = _mm_add_epi32(*((__m128i *)matrix_a++), *((__m128i *)matrix_b++));
+		uint32_t tile_width = g_hard_width >> 2;
 
-		*((__m128i *)output++) = t1;
-		*((__m128i *)output++) = t2;
-		*((__m128i *)output++) = t3;
-		*((__m128i *)output++) = t4;
+		for(register uint32_t y = tile_width; y--;)
+		{
+			for(register uint32_t x = tile_width; x--;)
+			{
+				add_4x4(matrix_a, matrix_b, result, x, y);
+			}
+		}
 
-		// Gotta solve the rest of the additions manually
-
-		return output - 4 * sizeof(__m128i);
+		return result;
 	}
 
 	//
@@ -722,33 +727,37 @@ uint32_t *matrix_add(register const uint32_t *matrix_a, register const uint32_t 
  * Returns new matrix, multiplying the two matrices together
  */
 
-static inline void multiply_4x4(register uint32_t *input_a, register uint32_t *input_b, register uint32_t offset_x, register uint32_t offset_y, register uint32_t *output)
+struct matrix_mul_worker_struct
 {
-	__m128i row1 = _mm_load_si128((__m128i *)(input_b + offset_x));
-	input_b += g_hard_width;
-	__m128i row2 = _mm_load_si128((__m128i *)input_b);
-	input_b += g_hard_width;
-	__m128i row3 = _mm_load_si128((__m128i *)input_b);
-	input_b += g_hard_width;
-	__m128i row4 = _mm_load_si128((__m128i *)input_b);
+	uint32_t *matrix_a;
+	uint32_t *matrix_b;
+	uint32_t *result;
+	uint32_t num_rows;
+	uint32_t starting_row;
+};
 
-	register uint32_t i = 4;
-	while(i--)
+static void *matrix_mul_worker(void *arg)
+{
+	struct matrix_mul_worker_struct *options = (struct matrix_mul_worker_struct *)arg;
+	register uint32_t *matrix_a = options->matrix_a;
+	register uint32_t *matrix_b = options->matrix_b;
+	register uint32_t *result = options->result;
+
+	for(uint32_t y = options->starting_row; y--;)
 	{
-		__m128i col1 = _mm_set1_epi32(*input_a++);
-		__m128i col2 = _mm_set1_epi32(*input_a++);
-		__m128i col3 = _mm_set1_epi32(*input_a++);
-		__m128i col4 = _mm_set1_epi32(*input_a++);
-		__m128i row = _mm_add_epi32(
-			_mm_add_epi32(
-				_mm_mullo_epi32(col1, row1),
-				_mm_mullo_epi32(col2, row2)),
-			_mm_add_epi32(
-				_mm_mullo_epi32(col3, row3),
-				_mm_mullo_epi32(col4, row4)));
-		_mm_store_si128((__m128i *)output, row);
-		output += 4;
+		for(uint32_t x = g_soft_width; x--;)
+		{
+			uint32_t total = 0;
+			for(uint32_t z = g_soft_width; z--;)
+			{
+				total += matrix_a[y * g_hard_width + z] * matrix_b[x * g_hard_width + z];
+			}
+			result[y * g_hard_width + x] = total;
+		}
 	}
+
+	free(arg);
+	return NULL;
 }
 
 uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matrix_b)
@@ -757,39 +766,65 @@ uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matrix_b)
 	{
 		// Only one thread, don't bother creating a new one, just solve.
 
-		// TODO:
-		// 	CURRENTLY ONLY SOLVES 4x4 MATRIX, MUST ADAPT FOR MORE
-
 		register uint32_t *result = new_matrix_malloc();
-		matrix_b = transposed(matrix_b);
-		register uint32_t *matrix_b_base = matrix_b;
+		register uint32_t *matrix_b_transposed = transposed(matrix_b);
 
-		register uint32_t count_y = g_soft_height;
-		register uint32_t count_x;
-		register uint32_t count_z;
-
-		while(count_y--)
+		for(uint32_t y = g_soft_height; y--;)
 		{
-			while(count_x--)
+			for(uint32_t x = g_soft_width; x--;)
 			{
-				count_z = g_soft_width;
-				register uint32_t total = 0;
-				matrix_b = matrix_b_base;
-				while(count_z--)
+				uint32_t total = 0;
+				for(uint32_t z = g_soft_width; z--;)
 				{
-					total += *matrix_a * *matrix_b++;
+					total += matrix_a[y * g_hard_width + z] * matrix_b_transposed[x * g_hard_width + z];
 				}
-				*result++ = total;
+				result[y * g_hard_width + x] = total;
 			}
-			result += g_buffer_width;
-			matrix_a += g_buffer_width;
-			matrix_b += g_buffer_width;
 		}
 
-		return result - g_soft_height * g_hard_width;
+		return result;
 	}
 
-	return NULL;
+	register uint32_t *result = new_matrix_malloc();
+	register uint32_t each = g_soft_height / g_nthreads;
+	register uint32_t *matrix_b_transposed = transposed(matrix_b);
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+
+	uint32_t curr_row = g_soft_height;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct matrix_mul_worker_struct *todo = malloc(sizeof(struct matrix_mul_worker_struct));
+		todo->matrix_a = matrix_a;
+		todo->matrix_b = matrix_b_transposed;
+		todo->result = result;
+		todo->num_rows = each;
+		todo->starting_row = curr_row;
+		pthread_create(thread_ids + i, NULL, matrix_mul_worker, todo);
+		curr_row -= each;
+	}
+
+	for(uint32_t y = g_soft_height % g_nthreads; y--;)
+	{
+		for(uint32_t x = g_soft_width; x--;)
+		{
+			uint32_t total = 0;
+			for(uint32_t z = g_soft_width; z--;)
+			{
+				total += matrix_a[y * g_hard_width + z] * matrix_b_transposed[x * g_hard_width + z];
+			}
+			result[y * g_hard_width + x] = total;
+		}
+	}
+
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
+	{
+		pthread_join(thread_ids[threads_waiting], NULL);
+	}
+
+	free(thread_ids);
+
+	return result;
 }
 
 /**
@@ -845,6 +880,15 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 			uint32_t *new_result = matrix_mul(previous_result, cached_results[i]);
 			free(previous_result);
 			previous_result = new_result;
+		}
+	}
+
+
+	for(register uint32_t i = 32; i--;)
+	{
+		if(cached_results[i] && cached_results[i] != previous_result)
+		{
+			free(cached_results[i]);
 		}
 	}
 

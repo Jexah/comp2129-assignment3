@@ -4,3 +4,4 @@ set c = transposed b
 set d = transposed c
 set e = transposed d
 bye
+result

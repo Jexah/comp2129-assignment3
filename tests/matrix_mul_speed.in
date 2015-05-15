@@ -1,0 +1,5 @@
+set a = random 5
+set b = matrix#mul a a
+set c = matrix#mul a b
+set d = matrix#mul b c
+bye

@@ -1,0 +1,9 @@
+set a = random 5
+show a
+set b = matrix#mul a a
+show b
+set c = matrix#mul a b
+show c
+set d = matrix#mul b c
+show d
+bye
