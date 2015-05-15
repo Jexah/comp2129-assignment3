@@ -378,17 +378,78 @@ static void *transpose_worker(void *arg)
 	return NULL;
 }*/
 
+inline static void transpose(uint32_t *input, uint32_t *output, uint32_t x_offset, uint32_t y_offset)
+{
+	register uint32_t width = g_width;
+	register uint32_t input_offset = 4 * x_offset + 4 * width * y_offset;
+	register uint32_t output_offset = 4 * width * x_offset + 4 * y_offset;
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)(input             + input_offset)), *((__m128i *)(input + width     + input_offset)));
+	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)(input + width * 2 + input_offset)), *((__m128i *)(input + width * 3 + input_offset)));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)(input             + input_offset)), *((__m128i *)(input + width     + input_offset)));
+	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)(input + width * 2 + input_offset)), *((__m128i *)(input + width * 3 + input_offset)));
+	*((__m128i *)(output             + output_offset)) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)(output + width     + output_offset)) = _mm_unpackhi_epi64(T0, T1);
+	*((__m128i *)(output + width * 2 + output_offset)) = _mm_unpacklo_epi64(T2, T3);
+	*((__m128i *)(output + width * 3 + output_offset)) = _mm_unpackhi_epi64(T2, T3);
+}
+
+inline static void transpose_simple(uint32_t *input, uint32_t *output)
+{
+	register uint32_t width = g_width;
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)(input            )), *((__m128i *)(input + width    )));
+	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)(input + width * 2)), *((__m128i *)(input + width * 3)));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)(input            )), *((__m128i *)(input + width    )));
+	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)(input + width * 2)), *((__m128i *)(input + width * 3)));
+	*((__m128i *)(output            )) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)(output + width    )) = _mm_unpackhi_epi64(T0, T1);
+	*((__m128i *)(output + width * 2)) = _mm_unpacklo_epi64(T2, T3);
+	*((__m128i *)(output + width * 3)) = _mm_unpackhi_epi64(T2, T3);
+}
+
+inline static void transpose_super_simple(uint32_t *input, uint32_t *output)
+{
+	register uint32_t width = g_width;
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)(input            )), *((__m128i *)(input + 4    )));
+	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)(input + 8)), *((__m128i *)(input + 12 )));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)(input            )), *((__m128i *)(input + 4    )));
+	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)(input + 8)), *((__m128i *)(input + 12)));
+	*((__m128i *)(output            )) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)(output + width    )) = _mm_unpackhi_epi64(T0, T1);
+	*((__m128i *)(output + width * 2)) = _mm_unpacklo_epi64(T2, T3);
+	*((__m128i *)(output + width * 3)) = _mm_unpackhi_epi64(T2, T3);
+}
+
+inline static void transpose_super_simple_2(uint32_t *input, uint32_t *output)
+{
+	//register uint32_t width = g_width;
+	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)input), *((__m128i *)input + 1));
+	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)input + 2), *((__m128i *)input + 3));
+	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)input), *((__m128i *)input + 1));
+	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)input + 2), *((__m128i *)input + 3));
+	*((__m128i *)output) = _mm_unpacklo_epi64(T0, T1);
+	*((__m128i *)output + 1) = _mm_unpackhi_epi64(T0, T1);
+	*((__m128i *)output + 2) = _mm_unpacklo_epi64(T2, T3);
+	*((__m128i *)output + 3) = _mm_unpackhi_epi64(T2, T3);
+}
+
 uint32_t *transposed(register uint32_t* matrix)
 {
 	uint32_t *result = new_matrix_malloc();
-	__m128i T0 = _mm_unpacklo_epi32(*((__m128i *)matrix), *((__m128i *)matrix + 1));
-	__m128i T1 = _mm_unpacklo_epi32(*((__m128i *)matrix + 2), *((__m128i *)matrix + 3));
-	__m128i T2 = _mm_unpackhi_epi32(*((__m128i *)matrix), *((__m128i *)matrix + 1));
-	__m128i T3 = _mm_unpackhi_epi32(*((__m128i *)matrix + 2), *((__m128i *)matrix + 3));
-	*((__m128i *)result) = _mm_unpacklo_epi64(T0, T1);
-	*((__m128i *)result + 1) = _mm_unpackhi_epi64(T0, T1);
-	*((__m128i *)result + 2) = _mm_unpacklo_epi64(T2, T3);
-	*((__m128i *)result + 3) = _mm_unpackhi_epi64(T2, T3);
+
+	/*width_in_tiles = width_in_elements >> 2;
+	total_tiles = width_in_tiles * width_in_tiles;
+
+	for(uint32_t tile_y = width_in_tiles; tile_y--;)
+	{
+		for(uint32_t tile_x = width_in_tiles; tile_x--;)
+		{
+			transpose(matrix, result, tile_x, tile_y);
+		}
+	}
+
+	transpose(matrix, result, 1, 0);
+
+
 
 	return result;
 	/*
