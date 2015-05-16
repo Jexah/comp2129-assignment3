@@ -1481,6 +1481,9 @@ inline static uint32_t get_matches_4x4(register uint32_t *input, register uint32
 		*((uint32_t *)(&res2) + 2) +
 		*((uint32_t *)(&res2) + 3) +
 		*((uint32_t *)(&res3) + 0) +
+		*((uint32_t *)(&res3) + 1) +
+		*((uint32_t *)(&res3) + 2) +
+		*((uint32_t *)(&res3) + 3) +
 		*((uint32_t *)(&res4) + 0) +
 		*((uint32_t *)(&res4) + 1) +
 		*((uint32_t *)(&res4) + 2) +
@@ -1541,29 +1544,29 @@ uint32_t get_frequency(register uint32_t *matrix, register uint32_t value)
 
 		if(tile_width)
 		{
-			if(tile_width - 1)
+			for(register uint32_t x = tile_width; x--;)
 			{
-				for(register uint32_t x = tile_width; x--;)
-				{
-					count += get_matches_4x4(matrix, value, x, tile_width - 1);
-				}
+				count += get_matches_4x4(matrix, value, x, tile_width - 1);
 			}
 
-			register uint32_t curr_row = tile_width - 1;
-			for(register uint32_t y = curr_row; y--;)
+
+			if(tile_width - 1 > 0)
 			{
-				for(register uint32_t x = tile_width; x--;)
+				register uint32_t curr_row = tile_width - 1;
+				for(register uint32_t y = curr_row; y--;)
 				{
-					count += get_matches_4x4(matrix, value, x, y);
+					for(register uint32_t x = tile_width; x--;)
+					{
+						count += get_matches_4x4(matrix, value, x, y);
+					}
 				}
 			}
 		}
 
-
 		for(register uint32_t y = tile_width << 2; y--;)
 		{
 			register uint32_t curr_col = g_soft_width - 1;
-			for(register uint32_t x = 4 - g_buffer_width; x--;)
+			for(register uint32_t x = (4 - g_buffer_width) % 4; x--;)
 			{
 				count += value ==  matrix[y * g_hard_width + curr_col];
 				--curr_col;
@@ -1571,7 +1574,7 @@ uint32_t get_frequency(register uint32_t *matrix, register uint32_t value)
 		}
 
 		register uint32_t curr_row = g_soft_height - 1;
-		for(register uint32_t y = 4 - g_buffer_height; y--;)
+		for(register uint32_t y = (4 - g_buffer_height) % 4; y--;)
 		{
 			for(register uint32_t x = g_soft_width; x--;)
 			{
@@ -1613,7 +1616,7 @@ uint32_t get_frequency(register uint32_t *matrix, register uint32_t value)
 	}
 
 	curr_row = g_soft_height - 1;
-	for(register uint32_t y = g_buffer_height; y--;)
+	for(register uint32_t y = 4 - g_buffer_height; y--;)
 	{
 		register uint32_t curr_col = g_soft_width - 1;
 		for(register uint32_t x = g_soft_width; x--;)
