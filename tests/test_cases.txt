@@ -27,3 +27,10 @@ time ./matrix 100 4 < tests/matrix_add_speed.in
 
 time ./matrix 10000 4 < tests/matrix_add_speed.in
 time /labcommon/comp2129/bin/matrix 10000 4 < tests/matrix_add_speed.in
+
+
+
+
+
+
+vi -d <(./matrix 100 4 < tests/compute_frequency.in) <(/labcommon/comp2129/bin/matrix 100 4 < tests/compute_frequency.in)
