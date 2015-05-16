@@ -1,0 +1,4 @@
+set a = random 5
+show a
+compute trace a
+bye

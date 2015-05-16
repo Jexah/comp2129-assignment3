@@ -876,9 +876,13 @@ uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matrix_b)
  */
 uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 {
+	if(exponent == 1)
+	{
+		return cloned(matrix);
+	}
+
 	if(!exponent)
 	{
-		printf("NO EXPONENT");
 		return identity_matrix();
 	}
 
@@ -886,7 +890,6 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 
 	if(memcmp(matrix, identity, g_hard_elements * sizeof(uint32_t)) == 0)
 	{
-		printf("SAME AS IDENTITY");
 		return identity;
 	}
 
@@ -898,7 +901,7 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 
 	if(exponent & 1)
 	{
-		cached_results[0] = matrix;
+		cached_results[0] = cloned(matrix);
 	}
 
 	while(curr_exponent)
@@ -938,14 +941,13 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 		}
 	}
 
-
 	for(register uint32_t i = 32; i--;)
 	{
 		if(cached_results[i] && (uint32_t *)(cached_results + i) != previous_result)
 		{
 			free(cached_results[i]);
-			cached_results[i] = NULL;
 		}
+		cached_results[i] = 0;
 	}
 
 	return previous_result;
