@@ -1,9 +1,9 @@
 set a = random 5
 show a
-set b = matrix#pow a 2
+set b = matrix#pow a 0
 show b
-set c = matrix#pow b 6
+set c = matrix#pow b 11
 show c
-set d = matrix#pow c 19
+set d = matrix#pow c 42
 show d
 bye
