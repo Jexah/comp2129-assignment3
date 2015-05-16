@@ -510,6 +510,7 @@ struct scalar_add_worker_struct
 	uint32_t *matrix;
 	uint32_t scalar;
 	uint32_t num_rows;
+	uint32_t starting_row;
 };
 
 static void *scalar_add_worker(void *arg)
@@ -518,15 +519,15 @@ static void *scalar_add_worker(void *arg)
 	register uint32_t *matrix = arguments->matrix;
 	register uint32_t *result = arguments->result;
 	register uint32_t scalar = arguments->scalar;
+	register uint32_t curr_y = arguments->starting_row;
 
 	for(register uint32_t count_y = arguments->num_rows; count_y--;)
 	{
 		for(register uint32_t count_x = g_soft_width; count_x--;)
 		{
-			*result++ = *matrix++ + scalar;
+			result[curr_y * g_hard_width + count_x] = matrix[curr_y * g_hard_width + count_x] + scalar;
 		}
-		result += g_buffer_width;
-		matrix += g_buffer_width;
+		++curr_y;
 	}
 	free(arg);
 	return NULL;
@@ -543,17 +544,16 @@ uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
 		{
 			for(register uint32_t count_x = g_soft_width; count_x--;)
 			{
-				*result++ = *matrix++ + scalar;
+				result[count_y * g_hard_width + count_x] = matrix[count_y * g_hard_width + count_x] + scalar;
 			}
-			result += g_buffer_width;
-			matrix += g_buffer_width;
 		}
-		return result - g_hard_width * g_soft_height;
+		return result;
 	}
 
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
 	register uint32_t *result = new_matrix_malloc();
 	register uint32_t each = g_soft_height / g_nthreads;
+	register uint32_t curr_y = 0;
 
 	for(register uint32_t i = g_nthreads; i--;)
 	{
@@ -562,19 +562,18 @@ uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
 		todo->result = result;
 		todo->scalar = scalar;
 		todo->num_rows = each;
-		pthread_create(thread_ids+i, NULL, scalar_add_worker, todo);
-		matrix += each * g_hard_width;
-		result += each * g_hard_width;
+		todo->starting_row = curr_y;
+		pthread_create(thread_ids + i, NULL, scalar_add_worker, todo);
+		curr_y += each * g_hard_width;
 	}
 
 	for(register uint32_t remaining = g_soft_height % g_nthreads; remaining--;)
 	{
 		for(register uint32_t count_x = g_soft_width; count_x--;)
 		{
-			*result++ = *matrix++ + scalar;
+			result[curr_y * g_hard_width + count_x] = matrix[curr_y * g_hard_width + count_x] + scalar;
 		}
-		result += g_buffer_width;
-		matrix += g_buffer_width;
+		++curr_y;
 	}
 
 	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;) {
@@ -583,7 +582,7 @@ uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
 
 	free(thread_ids);
 
-	return result - g_soft_height * g_hard_width;
+	return result;
 }
 
 /**
@@ -981,6 +980,17 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 /**
  * Returns the sum of all elements
  */
+inline static uint32_t get_sum_4x4(uint32_t *input, uint32_t x_offset, uint32_t y_offset)
+{
+	// Magic number 4 is the size of the matrix to sum
+	uint32_t offset = 4 * x_offset + 4 * g_hard_width * y_offset;
+	__m128i sum1 = _mm_add_epi32(*((__m128i *)(input + offset + g_hard_width * 0)), *((__m128i *)(input + offset + g_hard_width * 1)));
+	__m128i sum2 = _mm_add_epi32(*((__m128i *)(input + offset + g_hard_width * 2)), *((__m128i *)(input + offset + g_hard_width * 3)));
+	__m128i sum3 = _mm_add_epi32(sum1, sum2);
+
+	return *((uint32_t *)(&sum3) + 0) + *((uint32_t *)(&sum3) + 1) + *((uint32_t *)(&sum3) + 2) + *((uint32_t *)(&sum3) + 3);
+}
+
 struct get_sum_worker_struct
 {
 	uint32_t *matrix;
@@ -997,15 +1007,15 @@ static void *get_sum_worker(void *arg)
 	register uint32_t total = 0;
 	register uint32_t tile_width = g_hard_width >> 2;
 	register uint32_t *matrix = options->matrix;
-	register uint32_t curr_row = options->starting_row;
 
+	register uint32_t curr_row = options->starting_row;
 	for(register uint32_t y = options->num_rows; y--;)
 	{
 		for(register uint32_t x = tile_width; x--;)
 		{
 			total += get_sum_4x4(matrix, x, curr_row);
 		}
-		curr_row++;
+		curr_row--;
 	}
 	options->result[options->id] = total;
 
