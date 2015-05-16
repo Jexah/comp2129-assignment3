@@ -495,7 +495,7 @@ struct scalar_add_worker_struct
 	uint32_t *result;
 	uint32_t *matrix;
 	uint32_t scalar;
-	uint32_t total;
+	uint32_t num_rows;
 };
 
 static void *scalar_add_worker(void *arg)
@@ -504,13 +504,10 @@ static void *scalar_add_worker(void *arg)
 	register uint32_t *matrix = arguments->matrix;
 	register uint32_t *result = arguments->result;
 	register uint32_t scalar = arguments->scalar;
-	register uint32_t count_y = arguments->total;
-	register uint32_t count_x;
 
-	while(count_y--)
+	for(register uint32_t count_y = arguments->num_rows; count_y--;)
 	{
-		count_x = g_soft_width;
-		while(count_x--)
+		for(register uint32_t count_x = g_soft_width; count_x--;)
 		{
 			*result++ = *matrix++ + scalar;
 		}
@@ -527,20 +524,17 @@ uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
 	if(g_nthreads == 1 || g_nthreads > g_soft_height)
 	{
 		register uint32_t *result = new_matrix_malloc();
-		register uint32_t count_y = g_soft_height;
-		register uint32_t count_x;
 
-		while(count_y--)
+		for(register uint32_t count_y = g_soft_height; count_y--;)
 		{
-			count_x = g_soft_width;
-			while(count_x--)
+			for(register uint32_t count_x = g_soft_width; count_x--;)
 			{
 				*result++ = *matrix++ + scalar;
 			}
 			result += g_buffer_width;
 			matrix += g_buffer_width;
 		}
-		return result - g_soft_height * g_hard_width;
+		return result - g_hard_width * g_soft_height;
 	}
 
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
@@ -553,18 +547,15 @@ uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
 		todo->matrix = matrix;
 		todo->result = result;
 		todo->scalar = scalar;
-		todo->total = each;
+		todo->num_rows = each;
 		pthread_create(thread_ids+i, NULL, scalar_add_worker, todo);
-		matrix += each;
-		result += each;
+		matrix += each * g_hard_width;
+		result += each * g_hard_width;
 	}
 
-	register uint32_t remaining = g_soft_height % g_nthreads;
-	register uint32_t count_x;
-	while(remaining--)
+	for(register uint32_t remaining = g_soft_height % g_nthreads; remaining--;)
 	{
-		count_x = g_soft_width;
-		while(count_x--)
+		for(register uint32_t count_x = g_soft_width; count_x--;)
 		{
 			*result++ = *matrix++ + scalar;
 		}
