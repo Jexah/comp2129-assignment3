@@ -33,10 +33,10 @@ uint32_t* matrix_pow(uint32_t* matrix, const uint32_t exponent);
 
 /* compute operations */
 
-uint32_t get_sum(const uint32_t* matrix);
-uint32_t get_trace(const uint32_t* matrix);
-uint32_t get_minimum(const uint32_t* matrix);
-uint32_t get_maximum(const uint32_t* matrix);
-uint32_t get_frequency(const uint32_t* matrix, uint32_t value);
+uint32_t get_sum(register uint32_t* matrix);
+uint32_t get_trace(register uint32_t* matrix);
+uint32_t get_minimum(register uint32_t* matrix);
+uint32_t get_maximum(register uint32_t* matrix);
+uint32_t get_frequency(register uint32_t* matrix, register uint32_t value);
 
 #endif

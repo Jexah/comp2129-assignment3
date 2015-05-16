@@ -304,7 +304,7 @@ static void *reverse_worker(void *arg)
 uint32_t *reversed(register uint32_t *matrix)
 {
 
-	if(g_nthreads == 1)
+	if(g_nthreads == 1 || g_nthreads > g_soft_height)
 	{
 		register uint32_t *result = new_matrix_malloc();
 		matrix += g_hard_width * g_soft_height - g_buffer_width;
@@ -428,7 +428,7 @@ uint32_t *transposed(register uint32_t* matrix)
 {
 
 	register uint32_t tile_width = g_hard_width >> 2;
-	if(g_nthreads == 1 || g_hard_width < 2000)
+	if(g_nthreads == 1 || g_nthreads > tile_width)
 	{
 		// Only one thread or size is too small, just do it.
 		uint32_t *result = new_matrix_malloc();
@@ -524,7 +524,7 @@ static void *scalar_add_worker(void *arg)
 uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
 {
 
-	if(g_nthreads == 1)
+	if(g_nthreads == 1 || g_nthreads > g_soft_height)
 	{
 		register uint32_t *result = new_matrix_malloc();
 		register uint32_t count_y = g_soft_height;
@@ -619,7 +619,7 @@ static void *scalar_mul_worker(void *arg)
 uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t scalar)
 {
 
-	if(g_nthreads == 1)
+	if(g_nthreads == 1 || g_nthreads > g_soft_height)
 	{
 		register uint32_t *result = new_matrix_malloc();
 		register uint32_t count_y = g_soft_height;
@@ -729,14 +729,12 @@ static void *matrix_add_worker(void *arg)
 
 uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 {
-	// Matrix has multiple of 16 elements, 420 blazeit
-
-	if(g_nthreads == 1)
+	register uint32_t tile_width = g_hard_width >> 2;
+	if(g_nthreads == 1 || g_nthreads > tile_width)
 	{
 		// Only one thread or size is too small, just do it.
 
-		uint32_t *result = new_matrix_malloc();
-		uint32_t tile_width = g_hard_width >> 2;
+		register uint32_t *result = new_matrix_malloc();
 
 		for(register uint32_t y = tile_width; y--;)
 		{
@@ -749,7 +747,6 @@ uint32_t *matrix_add(register uint32_t *matrix_a, register uint32_t *matrix_b)
 	}
 
 	register uint32_t *result = new_matrix_malloc();
-	register uint32_t tile_width = g_hard_width >> 2;
 	register uint32_t each = tile_width / g_nthreads;
 
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
@@ -828,7 +825,8 @@ static void *matrix_mul_worker(void *arg)
 
 uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matrix_b)
 {
-	if(g_nthreads == 1)
+
+	if(g_nthreads == 1 || g_nthreads > g_soft_width)
 	{
 		// Only one thread, don't bother creating a new one, just solve.
 
@@ -912,8 +910,6 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 		return identity;
 	}
 
-	//if(g_nthreads == 1)
-	//{
 	uint32_t *cached_results[32] = {0};
 
 	register uint32_t curr_exponent = exponent >> 1;
@@ -973,9 +969,6 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 	}
 
 	return previous_result;
-	//}
-
-	// If g_nthreads > 1: Do some multithreading stuff, probably divide and conquer
 }
 
 ////////////////////////////////
@@ -985,182 +978,660 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 /**
  * Returns the sum of all elements
  */
-inline static uint32_t get_sum_4x4(uint32_t *input_a, uint32_t x_offset, uint32_t y_offset)
+inline static uint32_t get_sum_4x4(uint32_t *input, uint32_t x_offset, uint32_t y_offset)
 {
-	// Magic number 4 is the size of the matrix to add
+	// Magic number 4 is the size of the matrix to sum
 	uint32_t offset = 4 * x_offset + 4 * g_hard_width * y_offset;
-	__m128i sum1 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 0)), *((__m128i *)(input_a + offset + g_hard_width * 1)));
-	__m128i sum2 = _mm_add_epi32(*((__m128i *)(input_a + offset + g_hard_width * 2)), *((__m128i *)(input_a + offset + g_hard_width * 3)));
+	__m128i sum1 = _mm_add_epi32(*((__m128i *)(input + offset + g_hard_width * 0)), *((__m128i *)(input + offset + g_hard_width * 1)));
+	__m128i sum2 = _mm_add_epi32(*((__m128i *)(input + offset + g_hard_width * 2)), *((__m128i *)(input + offset + g_hard_width * 3)));
 	__m128i sum3 = _mm_add_epi32(sum1, sum2);
 
-	return *(uint32_t *)(&sum3 + 0) + *(uint32_t *)(&sum3 + 1) + *(uint32_t *)(&sum3 + 2) + *(uint32_t *)(&sum3 + 3);
+	return *((uint32_t *)(&sum3) + 0) + *((uint32_t *)(&sum3) + 1) + *((uint32_t *)(&sum3) + 2) + *((uint32_t *)(&sum3) + 3);
 }
-/*
+
 struct get_sum_worker_struct
 {
-	uint32_t *matrix_a;
+	uint32_t *matrix;
 	uint32_t *result;
 	uint32_t num_rows;
 	uint32_t starting_row;
+	uint32_t id;
 };
 
 static void *get_sum_worker(void *arg)
 {
-	//struct get_sum_worker_struct *options = (struct get_sum_worker_struct *)arg;
+	struct get_sum_worker_struct *options = (struct get_sum_worker_struct *)arg;
+
+	register uint32_t total = 0;
+	register uint32_t tile_width = g_hard_width >> 2;
+	register uint32_t *matrix = options->matrix;
+
+	register uint32_t curr_row = options->starting_row;
+	for(register uint32_t y = options->num_rows; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			total += get_sum_4x4(matrix, x, curr_row);
+		}
+		curr_row--;
+	}
+	options->result[options->id] = total;
 
 	free(arg);
 	return NULL;
 }
 
-uint32_t *get_sum(register uint32_t *matrix_a, register uint32_t *matrix_b)
+uint32_t get_sum(register uint32_t *matrix)
 {
-	// Matrix has multiple of 16 elements, 420 blazeit
-
-	if(g_nthreads == 1)
+	register uint32_t tile_width = g_hard_width >> 2;
+	if(g_nthreads == 1 || g_nthreads > tile_width)
 	{
-		// Only one thread or size is too small, just do it.
+		// Only one thread
 
-		uint32_t *result = new_matrix_malloc();
-		uint32_t tile_width = g_hard_width >> 2;
+		register uint32_t total = 0;
 
-		for(
 		for(register uint32_t y = tile_width; y--;)
 		{
 			for(register uint32_t x = tile_width; x--;)
 			{
-				add_4x4(matrix_a, matrix_b, result, x, y);
+				total += get_sum_4x4(matrix, x, y);
 			}
 		}
 
-		return result;
+		return total;
 	}
 
-	register uint32_t *result = new_matrix_malloc();
-	register uint32_t each = g_soft_height / g_nthreads;
+	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
+	register uint32_t each = tile_width / g_nthreads;
 	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
 
-	uint32_t curr_row = g_soft_height;
+	uint32_t curr_row = tile_width;
 	for(register uint32_t i = g_nthreads; i--;)
 	{
-		struct matrix_add_worker_struct *todo = malloc(sizeof(struct matrix_add_worker_struct));
-		todo->matrix_a = matrix_a;
-		todo->matrix_b = matrix_b;
+		struct get_sum_worker_struct *todo = malloc(sizeof(struct get_sum_worker_struct));
+		todo->matrix = matrix;
 		todo->result = result;
 		todo->num_rows = each;
+		todo->id = i;
 		todo->starting_row = curr_row;
-		pthread_create(thread_ids + i, NULL, matrix_add_worker, todo);
+		pthread_create(thread_ids + i, NULL, get_sum_worker, todo);
 		curr_row -= each;
 	}
 
-	register uint32_t tile_width = g_hard_width >> 2;
+	register uint32_t total = 0;
 	for(register uint32_t y = curr_row; y--;)
 	{
 		for(register uint32_t x = tile_width; x--;)
 		{
-			add_4x4(matrix_a, matrix_b, result, x, y);
+			total += get_sum_4x4(matrix, x, y);
 		}
 	}
-
 
 	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
 	{
 		pthread_join(thread_ids[threads_waiting], NULL);
+		total += result[threads_waiting];
 	}
 
+	free(result);
 	free(thread_ids);
 
-	return result;
+	return total;
 
-}
-*/
-uint32_t get_sum(const uint32_t *matrix)
-{
-
-	/*
-        to do
-
-        1 2
-        2 1 => 6
-
-        1 1
-        1 1 => 4
-    */
-
-	return 0;
 }
 
 /**
  * Returns the trace of the matrix
  */
-uint32_t get_trace(const uint32_t *matrix)
+uint32_t get_trace(register uint32_t *matrix)
 {
+	register uint32_t total = 0;
+	register uint32_t gap = g_hard_width + 1;
+	register uint32_t i = g_soft_height;
 
-	/*
-        to do
-
-        1 0
-        0 1 => 2
-
-        2 1
-        1 2 => 4
-    */
-
-	return 0;
+	while(i--)
+	{
+		total += *matrix;
+		matrix += gap;
+	}
+	return total;
 }
 
 /**
  * Returns the smallest value in the matrix
  */
-uint32_t get_minimum(const uint32_t *matrix)
+inline static uint32_t get_min_4x4(uint32_t *input, uint32_t x_offset, uint32_t y_offset)
 {
+	// Magic number 4 is the size of the matrix to sum
+	uint32_t offset = 4 * x_offset + 4 * g_hard_width * y_offset;
+	__m128i min1 = _mm_min_epi32(*((__m128i *)(input + offset + g_hard_width * 0)), *((__m128i *)(input + offset + g_hard_width * 1)));
+	__m128i min2 = _mm_min_epi32(*((__m128i *)(input + offset + g_hard_width * 2)), *((__m128i *)(input + offset + g_hard_width * 3)));
+	__m128i min3 = _mm_min_epi32(min1, min2);
 
-	/*
-        to do
+	return *((uint32_t *)(&min3) + 0);
+}
 
-        1 2
-        3 4 => 1
+struct get_min_worker_struct
+{
+	uint32_t *matrix;
+	uint32_t *result;
+	uint32_t num_rows;
+	uint32_t starting_row;
+	uint32_t id;
+};
 
-        4 3
-        2 1 => 1
-    */
+static void *get_min_worker(void *arg)
+{
+	struct get_min_worker_struct *options = (struct get_min_worker_struct *)arg;
 
-	return 0;
+	register uint32_t tile_width = g_hard_width >> 2;
+	register uint32_t *matrix = options->matrix;
+	register uint32_t curr_row = options->starting_row - 1;
+	register uint32_t num_rows = options->num_rows - 1;
+
+	register uint32_t min;
+	for(register uint32_t x = tile_width; x--;)
+	{
+		min = get_min_4x4(matrix, x, curr_row);
+	}
+
+	for(register uint32_t y = num_rows; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			register uint32_t recent = get_min_4x4(matrix, x, curr_row);
+			min = recent < min ? recent : min;
+		}
+		// 4 is height of tile
+		for(register uint32_t y_little = curr_row * 4; y_little--;)
+		{
+			for(register uint32_t x_little = g_soft_width; x_little--;)
+			{
+				register uint32_t recent = matrix[y_little * g_hard_width + x_little];
+				min = recent < min ? recent : min;
+			}
+		}
+		--curr_row;
+	}
+	options->result[options->id] = min;
+
+	free(arg);
+	return NULL;
+}
+
+uint32_t get_minimum(register uint32_t *matrix)
+{
+	register uint32_t tile_width = g_soft_width >> 2;
+	if(g_nthreads == 1 || g_nthreads > tile_width)
+	{
+		// Only one thread or not enough work
+		register uint32_t min = *matrix;
+
+		if(tile_width)
+		{
+			if(tile_width - 1)
+			{
+				for(register uint32_t x = tile_width; x--;)
+				{
+					register uint32_t recent = get_min_4x4(matrix, x, tile_width);
+					min = recent < min ? recent : min;
+				}
+			}
+
+			register uint32_t curr_row = tile_width - 1;
+			for(register uint32_t y = curr_row; y--;)
+			{
+				for(register uint32_t x = tile_width; x--;)
+				{
+					register uint32_t recent = get_min_4x4(matrix, x, y);
+					min = recent < min ? recent : min;
+				}
+			}
+		}
+
+
+		for(register uint32_t y = tile_width << 2; y--;)
+		{
+			register uint32_t curr_col = g_soft_width - 1;
+			for(register uint32_t x = 4 - g_buffer_width; x--;)
+			{
+				register uint32_t recent = matrix[y * g_hard_width + curr_col];
+				min = recent < min ? recent : min;
+				--curr_col;
+			}
+		}
+
+		register uint32_t curr_row = g_soft_height - 1;
+		for(register uint32_t y = 4 - g_buffer_height; y--;)
+		{
+			for(register uint32_t x = g_soft_width; x--;)
+			{
+				register uint32_t recent = matrix[curr_row * g_hard_width + x];
+				min = recent < min ? recent : min;
+			}
+			--curr_row;
+		}
+
+		return min;
+	}
+
+	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
+	register uint32_t each = tile_width / g_nthreads;
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+
+	uint32_t curr_row = tile_width - 1;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct get_min_worker_struct *todo = malloc(sizeof(struct get_min_worker_struct));
+		todo->matrix = matrix;
+		todo->result = result;
+		todo->num_rows = each;
+		todo->id = i;
+		todo->starting_row = curr_row;
+		pthread_create(thread_ids + i, NULL, get_min_worker, todo);
+		curr_row -= each;
+	}
+
+	register uint32_t remaining = tile_width % g_nthreads - 1;
+	register uint32_t min;
+	for(register uint32_t x = tile_width; x--;)
+	{
+		min = get_min_4x4(matrix, x, curr_row);
+	}
+	--curr_row;
+
+	for(register uint32_t y = remaining; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			register uint32_t recent = get_min_4x4(matrix, x, curr_row);
+			min = recent < min ? recent : min;
+		}
+		--curr_row;
+	}
+
+	curr_row = g_soft_height - 1;
+	for(register uint32_t y = 4 - g_buffer_height; y--;)
+	{
+		register uint32_t curr_col = g_soft_width - 1;
+		for(register uint32_t x = g_soft_width; x--;)
+		{
+			register uint32_t recent = matrix[curr_row * g_hard_width + curr_col];
+			min = recent < min ? recent : min;
+			--curr_col;
+		}
+		--curr_row;
+	}
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
+	{
+		pthread_join(thread_ids[threads_waiting], NULL);
+		min = result[threads_waiting] < min ? result[threads_waiting] : min;
+	}
+
+	free(result);
+	free(thread_ids);
+
+	return min;
 }
 
 /**
  * Returns the largest value in the matrix
  */
-uint32_t get_maximum(const uint32_t *matrix)
+inline static uint32_t get_max_4x4(uint32_t *input, uint32_t x_offset, uint32_t y_offset)
 {
+	// Magic number 4 is the size of the matrix to sum
+	uint32_t offset = 4 * x_offset + 4 * g_hard_width * y_offset;
+	__m128i max1 = _mm_min_epi32(*((__m128i *)(input + offset + g_hard_width * 0)), *((__m128i *)(input + offset + g_hard_width * 1)));
+	__m128i max2 = _mm_min_epi32(*((__m128i *)(input + offset + g_hard_width * 2)), *((__m128i *)(input + offset + g_hard_width * 3)));
+	__m128i max3 = _mm_min_epi32(max1, max2);
 
-	/*
-        to do
+	return *((uint32_t *)(&max3) + 0);
+}
 
-        1 2
-        3 4 => 4
+struct get_max_worker_struct
+{
+	uint32_t *matrix;
+	uint32_t *result;
+	uint32_t num_rows;
+	uint32_t starting_row;
+	uint32_t id;
+};
 
-        4 3
-        2 1 => 4
-    */
+static void *get_max_worker(void *arg)
+{
+	struct get_max_worker_struct *options = (struct get_max_worker_struct *)arg;
 
-	return 0;
+	register uint32_t tile_width = g_hard_width >> 2;
+	register uint32_t *matrix = options->matrix;
+	register uint32_t curr_row = options->starting_row - 1;
+	register uint32_t num_rows = options->num_rows - 1;
+
+	register uint32_t max;
+	for(register uint32_t x = tile_width; x--;)
+	{
+		max = get_max_4x4(matrix, x, curr_row);
+	}
+
+	for(register uint32_t y = num_rows; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			register uint32_t recent = get_min_4x4(matrix, x, curr_row);
+			max = recent > max ? recent : max;
+		}
+		// 4 is height of tile
+		for(register uint32_t y_little = curr_row * 4; y_little--;)
+		{
+			for(register uint32_t x_little = g_soft_width; x_little--;)
+			{
+				register uint32_t recent = matrix[y_little * g_hard_width + x_little];
+				max = recent > max ? recent : max;
+			}
+		}
+		--curr_row;
+	}
+	options->result[options->id] = max;
+
+	free(arg);
+	return NULL;
+}
+
+uint32_t get_maximum(register uint32_t *matrix)
+{
+	register uint32_t tile_width = g_soft_width >> 2;
+	if(g_nthreads == 1 || g_nthreads > tile_width)
+	{
+		// Only one thread or not enough work
+		register uint32_t max = *matrix;
+
+		if(tile_width)
+		{
+			if(tile_width - 1)
+			{
+				for(register uint32_t x = tile_width; x--;)
+				{
+					register uint32_t recent = get_max_4x4(matrix, x, tile_width - 1);
+					max = recent > max ? recent : max;
+				}
+			}
+
+			register uint32_t curr_row = tile_width - 1;
+			for(register uint32_t y = curr_row; y--;)
+			{
+				for(register uint32_t x = tile_width; x--;)
+				{
+					register uint32_t recent = get_max_4x4(matrix, x, y);
+					max = recent > max ? recent : max;
+				}
+			}
+		}
+
+
+		for(register uint32_t y = tile_width << 2; y--;)
+		{
+			register uint32_t curr_col = g_soft_width - 1;
+			for(register uint32_t x = 4 - g_buffer_width; x--;)
+			{
+				register uint32_t recent = matrix[y * g_hard_width + curr_col];
+				max = recent > max ? recent : max;
+				--curr_col;
+			}
+		}
+
+		register uint32_t curr_row = g_soft_height - 1;
+		for(register uint32_t y = 4 - g_buffer_height; y--;)
+		{
+			for(register uint32_t x = g_soft_width; x--;)
+			{
+				register uint32_t recent = matrix[curr_row * g_hard_width + x];
+				max = recent > max ? recent : max;
+			}
+			--curr_row;
+		}
+
+		return max;
+	}
+
+	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
+	register uint32_t each = tile_width / g_nthreads;
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+
+	uint32_t curr_row = tile_width - 1;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct get_max_worker_struct *todo = malloc(sizeof(struct get_max_worker_struct));
+		todo->matrix = matrix;
+		todo->result = result;
+		todo->num_rows = each;
+		todo->id = i;
+		todo->starting_row = curr_row;
+		pthread_create(thread_ids + i, NULL, get_max_worker, todo);
+		curr_row -= each;
+	}
+
+	register uint32_t remaining = tile_width % g_nthreads - 1;
+	register uint32_t max;
+	for(register uint32_t x = tile_width; x--;)
+	{
+		max = get_max_4x4(matrix, x, curr_row);
+	}
+	--curr_row;
+
+	for(register uint32_t y = remaining; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			register uint32_t recent = get_max_4x4(matrix, x, curr_row);
+			max = recent > max ? recent : max;
+		}
+		--curr_row;
+	}
+
+	curr_row = g_soft_height - 1;
+	for(register uint32_t y = g_buffer_height; y--;)
+	{
+		register uint32_t curr_col = g_soft_width - 1;
+		for(register uint32_t x = g_soft_width; x--;)
+		{
+			register uint32_t recent = matrix[curr_row * g_hard_width + curr_col];
+			max = recent > max ? recent : max;
+			--curr_col;
+		}
+		--curr_row;
+	}
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
+	{
+		pthread_join(thread_ids[threads_waiting], NULL);
+		max = result[threads_waiting] > max ? result[threads_waiting] : max;
+	}
+
+	free(result);
+	free(thread_ids);
+
+	return max;
 }
 
 /**
  * Returns the frequency of the value in the matrix
  */
-uint32_t get_frequency(const uint32_t *matrix, uint32_t value)
+inline static uint32_t get_matches_4x4(register uint32_t *input, register uint32_t match, register uint32_t x_offset, register uint32_t y_offset)
 {
+	// Magic number 4 is the size of the matrix to sum
+	register uint32_t offset = 4 * x_offset + 4 * g_hard_width * y_offset;
+	register __m128i match_mm = _mm_set_epi32(match, match, match, match);
+	register __m128i cmpe1 = _mm_cmpeq_epi32(*((__m128i *)(input + offset + g_hard_width * 0)), match_mm);
+	register __m128i cmpe2 = _mm_cmpeq_epi32(*((__m128i *)(input + offset + g_hard_width * 1)), match_mm);
+	register __m128i cmpe3 = _mm_cmpeq_epi32(*((__m128i *)(input + offset + g_hard_width * 2)), match_mm);
+	register __m128i cmpe4 = _mm_cmpeq_epi32(*((__m128i *)(input + offset + g_hard_width * 3)), match_mm);
 
-	/*
-        to do
+	__m128i ones = _mm_set_epi32(1, 1, 1, 1);
+	__m128i res1 = _mm_and_si128(cmpe1, ones);
+	__m128i res2 = _mm_and_si128(cmpe2, ones);
+	__m128i res3 = _mm_and_si128(cmpe3, ones);
+	__m128i res4 = _mm_and_si128(cmpe4, ones);
 
-        1 1
-        1 1 :: 1 => 4
+	return 	*((uint32_t *)(&res1) + 0) +
+		*((uint32_t *)(&res1) + 1) +
+		*((uint32_t *)(&res1) + 2) +
+		*((uint32_t *)(&res1) + 3) +
+		*((uint32_t *)(&res2) + 0) +
+		*((uint32_t *)(&res2) + 1) +
+		*((uint32_t *)(&res2) + 2) +
+		*((uint32_t *)(&res2) + 3) +
+		*((uint32_t *)(&res3) + 0) +
+		*((uint32_t *)(&res4) + 0) +
+		*((uint32_t *)(&res4) + 1) +
+		*((uint32_t *)(&res4) + 2) +
+		*((uint32_t *)(&res4) + 3);
+}
 
-        1 0
-        0 1 :: 2 => 0
-    */
+struct get_cmpe_worker_struct
+{
+	uint32_t *matrix;
+	uint32_t *result;
+	uint32_t num_rows;
+	uint32_t starting_row;
+	uint32_t id;
+	uint32_t match;
+};
 
-	return 0;
+static void *get_cmpe_worker(void *arg)
+{
+	struct get_cmpe_worker_struct *options = (struct get_cmpe_worker_struct *)arg;
+
+	register uint32_t tile_width = g_hard_width >> 2;
+	register uint32_t *matrix = options->matrix;
+	register uint32_t curr_row = options->starting_row;
+	register uint32_t num_rows = options->num_rows;
+	register uint32_t value = options->match;
+
+	register uint32_t count = 0;
+
+	for(register uint32_t y = num_rows; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			count += get_matches_4x4(matrix, value, x, curr_row);
+		}
+
+		for(register uint32_t y_little = curr_row * 4; y_little--;)
+		{
+			for(register uint32_t x_little = g_soft_width; x_little--;)
+			{
+				count += matrix[y_little * g_hard_width + x_little] == value;
+			}
+		}
+		--curr_row;
+	}
+	options->result[options->id] = count;
+
+	free(arg);
+	return NULL;
+}
+uint32_t get_frequency(register uint32_t *matrix, register uint32_t value)
+{
+	register uint32_t tile_width = g_soft_width >> 2;
+	if(g_nthreads == 1 || g_nthreads > tile_width)
+	{
+		// Only one thread or not enough work
+		register uint32_t count = 0;
+
+
+		if(tile_width)
+		{
+			if(tile_width - 1)
+			{
+				for(register uint32_t x = tile_width; x--;)
+				{
+					count += get_matches_4x4(matrix, value, x, tile_width - 1);
+				}
+			}
+
+			register uint32_t curr_row = tile_width - 1;
+			for(register uint32_t y = curr_row; y--;)
+			{
+				for(register uint32_t x = tile_width; x--;)
+				{
+					count += get_matches_4x4(matrix, value, x, y);
+				}
+			}
+		}
+
+
+		for(register uint32_t y = tile_width << 2; y--;)
+		{
+			register uint32_t curr_col = g_soft_width - 1;
+			for(register uint32_t x = 4 - g_buffer_width; x--;)
+			{
+				count += value ==  matrix[y * g_hard_width + curr_col];
+				--curr_col;
+			}
+		}
+
+		register uint32_t curr_row = g_soft_height - 1;
+		for(register uint32_t y = 4 - g_buffer_height; y--;)
+		{
+			for(register uint32_t x = g_soft_width; x--;)
+			{
+				count += value ==  matrix[y * g_hard_width + x];
+			}
+			--curr_row;
+		}
+
+		return count;
+	}
+
+	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
+	register uint32_t each = tile_width / g_nthreads;
+	thread_ids = malloc(sizeof(pthread_t) * g_nthreads);
+
+	uint32_t curr_row = tile_width - 1;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		struct get_cmpe_worker_struct *todo = malloc(sizeof(struct get_cmpe_worker_struct));
+		todo->matrix = matrix;
+		todo->result = result;
+		todo->num_rows = each;
+		todo->id = i;
+		todo->match = value;
+		todo->starting_row = curr_row;
+		pthread_create(thread_ids + i, NULL, get_cmpe_worker, todo);
+		curr_row -= each;
+	}
+
+	register uint32_t remaining = tile_width % g_nthreads;
+	register uint32_t count = 0;
+	for(register uint32_t y = remaining; y--;)
+	{
+		for(register uint32_t x = tile_width; x--;)
+		{
+			count += get_matches_4x4(matrix, value, x, curr_row);
+		}
+		--curr_row;
+	}
+
+	curr_row = g_soft_height - 1;
+	for(register uint32_t y = g_buffer_height; y--;)
+	{
+		register uint32_t curr_col = g_soft_width - 1;
+		for(register uint32_t x = g_soft_width; x--;)
+		{
+			count += value ==  matrix[curr_row * g_hard_width + curr_col];
+			--curr_col;
+		}
+		--curr_row;
+	}
+
+	for(register uint32_t threads_waiting = g_nthreads; threads_waiting--;)
+	{
+		pthread_join(thread_ids[threads_waiting], NULL);
+		count += result[threads_waiting];
+	}
+
+	free(result);
+	free(thread_ids);
+
+	return count;
 }
