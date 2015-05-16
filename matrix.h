@@ -8,6 +8,8 @@
 void set_seed(uint32_t value);
 void set_nthreads(ssize_t count);
 void set_dimensions(ssize_t width);
+void pow_rubbish_add(uint32_t *garbage);
+void empty_rubbish(uint32_t *exception);
 
 void display(register uint32_t* matrix);
 void display_row(register uint32_t* matrix, const ssize_t row);
