@@ -23,7 +23,7 @@ uint32_t* random_matrix(uint32_t seed);
 uint32_t* uniform_matrix(uint32_t value);
 uint32_t* sequence_matrix(uint32_t start, uint32_t step);
 
-uint32_t* cloned(const uint32_t* matrix);
+uint32_t* cloned(register uint32_t* matrix);
 uint32_t* reversed(register uint32_t* matrix);
 uint32_t* transposed(register uint32_t* matrix);
 

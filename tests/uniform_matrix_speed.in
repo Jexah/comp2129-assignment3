@@ -1,5 +1,5 @@
 set a = uniform 1
 set b = uniform 50
 set c = uniform 6239529
-set d = uniform -15919532
+set d = uniform 15919532
 bye

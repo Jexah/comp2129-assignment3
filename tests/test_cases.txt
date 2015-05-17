@@ -20,6 +20,11 @@ vi -d <(./matrix 100 4 < tests/matrix_mul.in) <(/labcommon/comp2129/bin/matrix 1
 
 vi -d <(./matrix 100 4 < tests/matrix_add.in) <(/labcommon/comp2129/bin/matrix 100 4 < tests/matrix_add.in)
 vi -d <(./matrix 100 4 < tests/matrix_pow.in) <(/labcommon/comp2129/bin/matrix 100 4 < tests/matrix_pow.in)
+vi -d <(./matrix 5 4 < tests/scalar_add.in) <(/labcommon/comp2129/bin/matrix 5 4 < tests/scalar_add.in)
+vi -d <(./matrix 5 4 < tests/scalar_mul.in) <(/labcommon/comp2129/bin/matrix 5 4 < tests/scalar_mul.in)
+
+
+vi -d <(./matrix 5 4 < tests/scalar_mul.in) <(/labcommon/comp2129/bin/matrix 5 4 < tests/scalar_mul.in)
 
 
 time ./matrix 100 4 < tests/matrix_add_speed.in
@@ -29,8 +34,36 @@ time ./matrix 10000 4 < tests/matrix_add_speed.in
 time /labcommon/comp2129/bin/matrix 10000 4 < tests/matrix_add_speed.in
 
 
+time ./matrix 10000 1 < tests/random_matrix_speed.in
+time ./matrix 10000 4 < tests/random_matrix_speed.in
+
+time ./matrix 10000 1 < tests/uniform_matrix_speed.in
+time ./matrix 10000 4 < tests/uniform_matrix_speed.in
+
+time ./matrix 10000 1 < tests/sequence_matrix_speed.in
+time ./matrix 10000 2 < tests/sequence_matrix_speed.in
+time ./matrix 10000 4 < tests/sequence_matrix_speed.in
+
+
+time ./matrix 10000 1 < tests/reversed_speed.in
+time ./matrix 10000 4 < tests/reversed_speed.in
+
+
+time ./matrix 10000 1 < tests/identity_matrix_speed.in
+time ./matrix 10000 4 < tests/identity_matrix_speed.in
+time for i in {1..10}; do ./matrix 10000 1 < tests/identity_matrix_speed.in >&-; done;
+time for i in {1..10}; do ./matrix 10000 4 < tests/identity_matrix_speed.in >&-; done;
+
+time for i in {1..1000}; do ./matrix 200 1 < tests/identity_matrix_speed.in >&-; done;
+time for i in {1..10}; do ./matrix 10000 4 < tests/reversed_speed.in >&-; done;
+time for i in {1..10}; do ./matrix 10000 4 < tests/cloned_speed.in >&-; done;
 
 
 
 
-vi -d <(./matrix 100 4 < tests/compute_frequency.in) <(/labcommon/comp2129/bin/matrix 100 4 < tests/compute_frequency.in)
+vi -d <(./matrix 100 4 < tests/trace.in) <(/labcommon/comp2129/bin/matrix 100 4 < tests/trace.in)
+
+
+time for i in {1..1000}; do ./matrix 200 1 < tests/uniform_matrix_speed.in >&-; done;
+time for i in {1..1000}; do ./matrix 200 4 < tests/uniform_matrix_speed.in >&-; done;
+time for i in `seq 10`; do command; done

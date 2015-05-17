@@ -4,5 +4,5 @@ set b = sequence 500 1234
 show b
 set c = sequence 1234 -4312
 show c
-set d = sequence 827347
+set d = sequence 827347 13
 show d

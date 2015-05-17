@@ -1,4 +1,4 @@
-set a = random 5
+maximumset a = random 5
 set b = scalar#mul a 2
 set c = scalar#mul a 50
 set d = scalar#mul c 124951
