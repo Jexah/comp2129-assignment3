@@ -247,13 +247,20 @@ inline uint32_t *random_matrix(const uint32_t seed)
 
 	set_seed(seed);
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t first = 1;
+	register uint32_t min;
+	register uint32_t max;
 	register uint32_t sum = 0;
 
 	for(register uint32_t i = g_elements; i--;)
 	{
 		*matrix_cpy = fast_rand();
+		if(first)
+		{
+			first = 0;
+			min = *matrix_cpy;
+			max = *matrix_cpy;
+		}
 		if(*matrix_cpy < min) min = *matrix_cpy;
 		if(*matrix_cpy > max) max = *matrix_cpy;
 		sum += *matrix_cpy;
@@ -381,24 +388,15 @@ static inline uint32_t *sequence_matrix_serial(const uint32_t start, const regis
 
 	register uint32_t curr_value = start;
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
-	register uint32_t sum = 0;
-
 	for(register uint32_t i = g_elements; i--;)
 	{
-		*matrix_cpy = curr_value;
-		if(*matrix_cpy < min) min = *matrix_cpy;
-		if(*matrix_cpy > max) max = *matrix_cpy;
-		sum += *matrix_cpy;
-		++matrix_cpy;
+		*matrix_cpy++ = curr_value;
 		curr_value += step;
 	}
 
-	SET_MIN(matrix, min);
-	SET_MAX(matrix, max);
-	SET_SUM(matrix, sum);
-
+	SET_MIN(matrix, start);
+	SET_MAX(matrix, start + step * (g_elements - 1));
+	SET_SUM(matrix, (start + (start + step * (g_elements - 1))) * g_elements / 2);
 
 	return matrix;
 }
@@ -410,10 +408,6 @@ struct sequence_argument
 	uint32_t increment;
 	uint32_t start_row;
 	uint32_t num_rows;
-	uint32_t *mins;
-	uint32_t *maxes;
-	uint32_t *sums;
-	uint32_t id;
 };
 
 static inline void *sequence_worker(void *arg)
@@ -424,23 +418,11 @@ static inline void *sequence_worker(void *arg)
 	register uint32_t curr_value = arguments->start_value + increment * arguments->start_row * g_width;
 	matrix += arguments->start_row * g_width;
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
-	register uint32_t sum = 0;
-
 	for(register uint32_t i = arguments->num_rows * g_width; i--;)
 	{
-		*matrix = curr_value;
-		if(*matrix < min) min = *matrix;
-		if(*matrix > max) max = *matrix;
-		sum += *matrix;
-		++matrix;
+		*matrix++ = curr_value;
 		curr_value += increment;
 	}
-
-	*(arguments->mins + arguments->id) = min;
-	*(arguments->maxes + arguments->id) = max;
-	*(arguments->sums + arguments->id) = sum;
 
 	return NULL;
 }
@@ -464,10 +446,6 @@ inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
 	struct sequence_argument *args = malloc(sizeof(struct sequence_argument) * g_nthreads);
 	uint32_t *matrix = new_matrix_malloc();
 
-	register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
-	register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
-	register uint32_t *sums = malloc(sizeof(uint32_t) * g_nthreads);
-
 	pthread_t thread_ids[g_nthreads];
 
 	register uint32_t start_row = 0;
@@ -480,11 +458,7 @@ inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
             .start_row = start_row,
             .num_rows = this_rows,
 			.start_value = start,
-			.increment = step,
-			.mins = mins,
-			.maxes = maxes,
-			.sums = sums,
-			.id = i
+			.increment = step
         };
 		start_row += this_rows;
     }
@@ -494,21 +468,14 @@ inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
         pthread_create(thread_ids + i, NULL, sequence_worker, args + i);
     }
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
-	register uint32_t sum = 0;
-
 	for(register uint32_t i = g_nthreads; i--;)
 	{
         pthread_join(*(thread_ids + i), NULL);
-		sum += *(sums + i);
-		if(*(mins + i) < min) min = *(mins + i);
-		if(*(maxes + i) > max) max = *(maxes + i);
     }
 
-	SET_MIN(matrix, min);
-	SET_MAX(matrix, max);
-	SET_SUM(matrix, sum);
+	SET_MIN(matrix, start);
+	SET_MAX(matrix, start + step * (g_elements - 1));
+	SET_SUM(matrix, (GET_MIN(matrix) + GET_MAX(matrix)) * g_elements / 2);
 
 	free(args);
 
@@ -624,10 +591,6 @@ static inline uint32_t *reversed_serial(uint32_t *matrix)
 		*result++ = *matrix_cpy--;
 	}
 
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
-
 	return result;
 }
 
@@ -690,10 +653,6 @@ inline uint32_t *reversed(uint32_t *matrix)
 	{
         pthread_join(*(thread_ids + i), NULL);
     }
-
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
 
 	free(args);
 
@@ -768,10 +727,6 @@ inline uint32_t *transposed(register uint32_t* matrix)
         pthread_join(*(thread_ids + i), NULL);
     }
 
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
-
 	free(args);
 
 	return result;
@@ -786,17 +741,16 @@ static inline uint32_t *scalar_add_serial(uint32_t *matrix, register uint32_t sc
 	register uint32_t *result = new_matrix_malloc();
 	register uint32_t *result_cpy = result;
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t min = *matrix;
+	register uint32_t max = *matrix;
 	register uint32_t sum = 0;
 
 	for(register uint32_t i = g_elements; i--;)
 	{
-		*result_cpy = *matrix++ + scalar;
-		if(*result_cpy < min) min = *result_cpy;
-		if(*result_cpy > max) max = *result_cpy;
-		sum += *result_cpy;
-		++result_cpy;
+		if(*matrix < min) min = *matrix;
+		if(*matrix > max) max = *matrix;
+		sum += *matrix;
+		*result_cpy++ = *matrix++ + scalar;
 	}
 
 	SET_MIN(result, min);
@@ -829,17 +783,16 @@ static inline void *scalar_add_worker(void *arg)
 	matrix += arguments->start_row * g_width;
 	result += arguments->start_row * g_width;
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t min = *matrix;
+	register uint32_t max = *matrix;
 	register uint32_t sum = 0;
 
 	for(register uint32_t i = arguments->num_rows * g_width; i--;)
 	{
-		*result = *matrix++ + scalar;
-		if(*result < min) min = *result;
-		if(*result > max) max = *result;
-		sum += *result;
-		++result;
+		if(*matrix < min) min = *matrix;
+		if(*matrix > max) max = *matrix;
+		sum += *matrix;
+		*result++ = *matrix++ + scalar;
 	}
 
 	*(arguments->mins + arguments->id) = min;
@@ -888,21 +841,24 @@ inline uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t s
         pthread_create(thread_ids + i, NULL, scalar_add_worker, args + i);
     }
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t first = 1;
+	register uint32_t min;
+	register uint32_t max;
 	register uint32_t sum = 0;
 
 	for(register uint32_t i = g_nthreads; i--;)
 	{
         pthread_join(*(thread_ids + i), NULL);
 		sum += *(sums + i);
+		if(first)
+		{
+			first = 0;
+			min = *(mins + i);
+			max = *(maxes + i);
+		}
 		if(*(mins + i) < min) min = *(mins + i);
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
-
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
 
 	free(args);
 
@@ -941,11 +897,10 @@ static inline void *scalar_mul_worker(void *arg)
 
 	for(register uint32_t i = arguments->num_rows * g_width; i--;)
 	{
-		*result = *matrix++ * scalar;
-		if(*result < min) min = *result;
-		if(*result > max) max = *result;
-		sum += *result;
-		++result;
+		if(*matrix < min) min = *matrix;
+		if(*matrix > max) max = *matrix;
+		sum += *matrix;
+		*result++ = *matrix++ * scalar;
 	}
 
 	*(arguments->mins + arguments->id) = min;
@@ -989,8 +944,9 @@ inline uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t s
         pthread_create(thread_ids + i, NULL, scalar_mul_worker, args + i);
     }
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t first = 1;
+	register uint32_t min;
+	register uint32_t max;
 	register uint32_t sum = 0;
 
 
@@ -998,13 +954,15 @@ inline uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t s
 	{
         pthread_join(*(thread_ids + i), NULL);
 		sum += *(sums + i);
+		if(first)
+		{
+			first = 0;
+			min = *(mins + i);
+			max = *(maxes + i);
+		}
 		if(*(mins + i) < min) min = *(mins + i);
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
-
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
 
 	free(args);
 
@@ -1093,8 +1051,9 @@ inline uint32_t *matrix_add(uint32_t *matrix_a, uint32_t *matrix_b)
         pthread_create(thread_ids + i, NULL, matrix_add_worker, args + i);
     }
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t first = 1;
+	register uint32_t min;
+	register uint32_t max;
 	register uint32_t sum = 0;
 
 
@@ -1102,13 +1061,15 @@ inline uint32_t *matrix_add(uint32_t *matrix_a, uint32_t *matrix_b)
 	{
         pthread_join(*(thread_ids + i), NULL);
 		sum += *(sums + i);
+		if(first)
+		{
+			first = 0;
+			min = *(mins + i);
+			max = *(maxes + i);
+		}
 		if(*(mins + i) < min) min = *(mins + i);
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
-
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
 
 	free(args);
 
@@ -1140,8 +1101,9 @@ static inline void *matrix_mul_worker(void *arg)
 	register uint32_t *matrix_b = arguments->matrix_b;
 	register uint32_t *result = arguments->result;
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t first = 1;
+	register uint32_t min;
+	register uint32_t max;
 	register uint32_t sum = 0;
 
 	// /* Transposed implementation
@@ -1156,6 +1118,12 @@ static inline void *matrix_mul_worker(void *arg)
 			for(register uint32_t z = g_width; z--;)
 			{
 				total += matrix_a[z + curr_y * g_width] * matrix_b[curr_x * g_width + z];
+			}
+			if(first)
+			{
+				first = 0;
+				min = total;
+				max = total;
 			}
 			if(total < min) min = total;
 			if(total > max) max = total;
@@ -1235,15 +1203,21 @@ inline uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matr
         pthread_create(thread_ids + i, NULL, matrix_mul_worker, args + i);
     }
 
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
+	register uint32_t first = 1;
+	register uint32_t min;
+	register uint32_t max;
 	register uint32_t sum = 0;
-
 
 	for(register uint32_t i = g_nthreads; i--;)
 	{
         pthread_join(*(thread_ids + i), NULL);
 		sum += *(sums + i);
+		if(first)
+		{
+			first = 0;
+			min = *(mins + i);
+			max = *(maxes + i);
+		}
 		if(*(mins + i) < min) min = *(mins + i);
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
@@ -1586,7 +1560,6 @@ inline uint32_t get_maximum(register uint32_t *matrix)
 /**
  * Returns the frequency of the value in the matrix
  */
-
 
 struct get_cmpe_argument
 {
