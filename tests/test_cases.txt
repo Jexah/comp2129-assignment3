@@ -54,9 +54,12 @@ time ./matrix 10000 4 < tests/identity_matrix_speed.in
 time for i in {1..10}; do ./matrix 10000 1 < tests/identity_matrix_speed.in >&-; done;
 time for i in {1..10}; do ./matrix 10000 4 < tests/identity_matrix_speed.in >&-; done;
 
+time for i in {1..10}; do ./matrix 10000 4 < tests/random_matrix_speed.in >&-; done;
+
 time for i in {1..1000}; do ./matrix 200 1 < tests/identity_matrix_speed.in >&-; done;
 time for i in {1..10}; do ./matrix 10000 4 < tests/reversed_speed.in >&-; done;
-time for i in {1..10}; do ./matrix 10000 4 < tests/cloned_speed.in >&-; done;
+time for i in {1..2}; do ./matrix 10000 4 < tests/scalar_add_speed.in >&-; done;;
+time for i in {1..2}; do ./matrix 10000 4 < tests/scalar_add_speed.in >&-; done;
 
 
 

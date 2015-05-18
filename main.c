@@ -13,15 +13,15 @@
 #define MAX_ENTRIES 512
 
 #define MATRIX_GUARD(x) \
-    uint32_t* m = find_matrix(x); \
+    matrix_t* m = find_matrix(x); \
     if (m == NULL) { \
         puts("no such matrix"); \
         return; \
     }
 
 #define MATRIX_GUARD_PAIR(x, y) \
-    uint32_t* m1 = find_matrix(x); \
-    uint32_t* m2 = find_matrix(y); \
+    matrix_t* m1 = find_matrix(x); \
+    matrix_t* m2 = find_matrix(y); \
     if (m1 == NULL || m2 == NULL) { \
         puts("no such matrix"); \
         return; \
@@ -29,7 +29,7 @@
 
 typedef struct entry {
     char key[MAX_BUFFER];
-    uint32_t* matrix;
+    matrix_t* matrix;
 } entry;
 
 static ssize_t g_order    = 0; /* 1 <= order <= 10,000 */
@@ -69,7 +69,7 @@ entry* find_entry(char* key) {
 /**
  * Returns matrix with given key
  */
-uint32_t* find_matrix(char* key) {
+matrix_t* find_matrix(char* key) {
 
     entry* e = find_entry(key);
 
@@ -90,6 +90,7 @@ void release(void) {
     }
 
     for (ssize_t i = 0; i < g_nentries; i++) {
+        free(g_entries[i]->matrix->data);
         free(g_entries[i]->matrix);
         free(g_entries[i]);
     }
@@ -188,7 +189,7 @@ void command_set(const char* line) {
         return;
     }
 
-    uint32_t* matrix = NULL;
+    matrix_t* matrix = NULL;
 
     switch (argc) {
         case 3:
@@ -253,6 +254,7 @@ void command_set(const char* line) {
     if (e == NULL) {
         e = add_entry(key);
     } else {
+        free(e->matrix->data);
         free(e->matrix);
     }
 

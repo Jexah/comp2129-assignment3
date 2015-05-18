@@ -14,24 +14,23 @@
 #include "matrix.h"
 
 #define ALLOCATE_ROWS(i) ((g_height / g_nthreads) + !!(g_height % g_nthreads - i > 0))
-#define SET_MIN(matrix, value) (*(matrix + g_elements) = value)
-#define SET_MAX(matrix, value) (*(matrix + g_elements + 1) = value)
-#define SET_SUM(matrix, value) (*(matrix + g_elements + 2) = value)
-#define GET_MIN(matrix) (*(matrix + g_elements))
-#define GET_MAX(matrix) (*(matrix + g_elements + 1))
-#define GET_SUM(matrix) (*(matrix + g_elements + 2))
-
-static uint32_t g_seed = 0;
 
 static ssize_t g_width = 0;
 static ssize_t g_height = 0;
 static ssize_t g_elements = 0;
 
-static uint32_t *pow_rubbish[255];
+static matrix_t *pow_rubbish[255];
 static uint32_t rubbish_counter = 0;
 
 static ssize_t g_nthreads = 1;
 
+static uint32_t g_seed = 0;
+/*
+static inline void new_occurances(void)
+{
+
+}
+*/
 ////////////////////////////////
 ///     UTILITY FUNCTIONS    ///
 ////////////////////////////////
@@ -41,9 +40,41 @@ static ssize_t g_nthreads = 1;
  */
 static inline uint32_t fast_rand(void)
 {
-	g_seed = (214013 * g_seed + 2531011);
-	return (g_seed >> 16) & 0x7FFF;
+    g_seed = (214013 * g_seed + 2531011);
+    return (g_seed >> 16) & 0x7FFF;
 }
+
+static inline uint32_t fast_rand_seed(register uint32_t *seed)
+{
+    *seed = (214013 * (*seed) + 2531011);
+    return (*seed >> 16) & 0x7FFF;
+}
+
+static inline uint32_t int_pow(register uint32_t num, register uint32_t pow)
+{
+	if(pow == 0) return 1;
+	return num * int_pow(num, pow - 1);
+}
+
+static inline uint32_t get_pow_sum(register uint32_t num, register uint32_t pow)
+{
+	if(pow == 0)
+	{
+		return 1;
+	}
+	return int_pow(num, pow) + get_pow_sum(num, pow - 1);
+}
+
+static inline uint32_t get_seed(register uint32_t n, register uint32_t base_seed)
+{
+	if(n == 0)
+	{
+		return base_seed;
+	}
+	return (int_pow(214013, n) * base_seed) + (2531011 * get_pow_sum(214013, n - 1));
+}
+
+
 
 /**
  * Sets the seed used when generating pseudorandom numbers
@@ -75,8 +106,9 @@ void set_dimensions(ssize_t order)
 /**
  * Displays given matrix
  */
-void display(register uint32_t *matrix)
+void display(register matrix_t *matrix_obj)
 {
+	register uint32_t *matrix = matrix_obj->data;
 	register uint32_t rows_remaining = g_height;
 	while(rows_remaining--)
 	{
@@ -92,8 +124,9 @@ void display(register uint32_t *matrix)
 /**
  * Displays given matrix row
  */
-void display_row(register uint32_t *matrix, const ssize_t row)
+void display_row(register matrix_t *matrix_obj, const ssize_t row)
 {
+	register uint32_t *matrix = matrix_obj->data;
 	matrix += row * g_width;
 	printf("%" PRIu32 " ", *matrix++);
 	for (register uint32_t i = g_width - 1; i--;)
@@ -107,8 +140,9 @@ void display_row(register uint32_t *matrix, const ssize_t row)
 /**
  * Displays given matrix column
  */
-void display_column(register uint32_t *matrix, const ssize_t column)
+void display_column(register matrix_t *matrix_obj, const ssize_t column)
 {
+	register uint32_t *matrix = matrix_obj->data;
 	matrix += column;
 	for(register uint32_t rows_remaining = g_height; rows_remaining--;)
 	{
@@ -120,10 +154,12 @@ void display_column(register uint32_t *matrix, const ssize_t column)
 /**
  * Displays the value stored at the given element index
  */
-void display_element(const uint32_t *matrix, const ssize_t row, const ssize_t column)
+void display_element(const matrix_t *matrix_obj, const ssize_t row, const ssize_t column)
 {
-	printf("%" PRIu32 "\n", matrix[row * g_width + column]);
+	printf("%" PRIu32 "\n", matrix_obj->data[row * g_width + column]);
 }
+
+//static inline  new_occurances
 
 ////////////////////////////////
 ///   MATRIX INITALISATIONS  ///
@@ -132,17 +168,23 @@ void display_element(const uint32_t *matrix, const ssize_t row, const ssize_t co
 /**
  * Returns new matrix with all elements set to zero
  */
-inline static uint32_t *new_matrix(void)
+inline static matrix_t *new_matrix(void)
 {
-	return calloc(g_elements + 4, sizeof(uint32_t));
+	matrix_t *matrix_obj = calloc(1, sizeof(matrix_t));
+	matrix_obj->data = calloc(g_elements, sizeof(uint32_t));
+	matrix_obj->occurances = calloc(g_elements, sizeof(occurances_t));
+	return matrix_obj;
 }
 
 /**
  * Returns new matrix without setting elements
  */
-inline static uint32_t *new_matrix_malloc(void)
+inline static matrix_t *new_matrix_malloc(void)
 {
-	return malloc((g_elements + 4) * sizeof(uint32_t));
+	matrix_t *matrix_obj = malloc(sizeof(matrix_t));
+	matrix_obj->data = malloc(g_elements * sizeof(uint32_t));
+	matrix_obj->occurances = malloc(g_elements * sizeof(occurances_t));
+	return matrix_obj;
 }
 
 /**
@@ -150,29 +192,29 @@ inline static uint32_t *new_matrix_malloc(void)
  */
 
 ///* Serial identity
-static inline uint32_t *identity_matrix_serial(void)
+static inline matrix_t *identity_matrix_serial(void)
 {
-	uint32_t *matrix = new_matrix();
+	matrix_t *matrix_obj = new_matrix();
 
-	register uint32_t *matrix_cpy = matrix;
+	register uint32_t *matrix_cpy = matrix_obj->data;
 	for(register uint32_t i = g_height; i--;)
 	{
 		*matrix_cpy = 1;
 		matrix_cpy += g_width + 1;
 	}
 
-	SET_MIN(matrix, 0);
-	SET_MAX(matrix, 1);
-	SET_SUM(matrix, g_height);
+	matrix_obj->min = 0;
+	matrix_obj->max = 1;
+	matrix_obj->sum = g_height;
 
-	return matrix;
+	return matrix_obj;
 }
 // */
 
 // /* Parallel identity
 struct identity_argument
 {
-	uint32_t *matrix;
+	matrix_t *matrix_obj;
 	uint32_t start_row;
 	uint32_t num_rows;
 };
@@ -180,7 +222,7 @@ struct identity_argument
 static inline void *identity_worker(void *arg)
 {
 	struct identity_argument *arguments = (struct identity_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *matrix = arguments->matrix_obj->data;
 	matrix += arguments->start_row * g_width + arguments->start_row;
 
 	for(register uint32_t i = arguments->num_rows; i--;)
@@ -191,14 +233,14 @@ static inline void *identity_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *identity_matrix(void)
+matrix_t *identity_matrix(void)
 {
 	if(g_nthreads == 1 || g_width < 200)
 	{
 		return identity_matrix_serial();
 	}
 
-	uint32_t *matrix = new_matrix();
+	matrix_t *matrix_obj = new_matrix();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -209,7 +251,7 @@ inline uint32_t *identity_matrix(void)
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct identity_argument)
 		{
-            .matrix = matrix,
+            .matrix_obj = matrix_obj,
             .start_row = start_row,
             .num_rows = this_rows
         };
@@ -226,26 +268,26 @@ inline uint32_t *identity_matrix(void)
         pthread_join(*(thread_ids + i), NULL);
     }
 
-	SET_MIN(matrix, 0);
-	SET_MAX(matrix, 1);
-	SET_SUM(matrix, g_height);
+	matrix_obj->min = 0;
+	matrix_obj->max = 1;
+	matrix_obj->sum = g_height;
 
 	free(args);
 
-	return matrix;
+	return matrix_obj;
 }
 // */
 
 /**
  * Returns new matrix with elements generated at random using given seed
  */
-
-inline uint32_t *random_matrix(const uint32_t seed)
+// /* Serial random matrix
+matrix_t *random_matrix_serial(register uint32_t seed)
 {
-	register uint32_t *matrix = new_matrix_malloc();
-	register uint32_t *matrix_cpy = matrix;
+	register matrix_t *matrix_obj = new_matrix_malloc();
+	register uint32_t *matrix_cpy = matrix_obj->data;
 
-	set_seed(seed);
+	g_seed = seed;
 
 	register uint32_t min = UINT32_MAX;
 	register uint32_t max = 0;
@@ -260,11 +302,106 @@ inline uint32_t *random_matrix(const uint32_t seed)
 		++matrix_cpy;
 	}
 
-	SET_MIN(matrix, min);
-	SET_MAX(matrix, max);
-	SET_SUM(matrix, sum);
+	matrix_obj->min = min;
+	matrix_obj->max = max;
+	matrix_obj->sum = sum;
 
-	return matrix;
+	return matrix_obj;
+}
+// */
+
+struct random_argument
+{
+	matrix_t *matrix_obj;
+	uint32_t start_row;
+	uint32_t num_rows;
+	uint32_t seed;
+};
+
+static inline void *random_worker(void *arg)
+{
+	struct random_argument *arguments = (struct random_argument *)arg;
+	register uint32_t *matrix = arguments->matrix_obj->data;
+	matrix += arguments->start_row * g_width;
+
+	uint32_t seed = get_seed(arguments->start_row * g_width, arguments->seed);
+	register uint32_t *seed_ptr = &seed;
+
+	register uint32_t min = UINT32_MAX;
+	register uint32_t max = 0;
+	register uint32_t sum = 0;
+
+	for(register uint32_t i = arguments->num_rows * g_width; i--;)
+	{
+		*matrix = fast_rand_seed(seed_ptr);
+		if(*matrix < min) min = *matrix;
+		if(*matrix > max) max = *matrix;
+		sum += *matrix;
+		++matrix;
+	}
+
+	arguments->matrix_obj->min = min;
+	arguments->matrix_obj->max = max;
+	arguments->matrix_obj->sum = sum;
+
+	return NULL;
+}
+
+
+matrix_t *random_matrix(register uint32_t seed)
+{
+	if(g_nthreads == 1 || g_width < 200)
+	{
+		return random_matrix_serial(seed);
+	}
+
+	matrix_t *matrix_obj = new_matrix();
+
+	register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
+	register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
+	register uint32_t *sums = malloc(sizeof(uint32_t) * g_nthreads);
+
+	pthread_t thread_ids[g_nthreads];
+
+	struct random_argument *args = malloc(sizeof(struct random_argument) * g_nthreads);
+	register uint32_t start_row = 0;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		register uint32_t this_rows = ALLOCATE_ROWS(i);
+        args[i] = (struct random_argument)
+		{
+            .matrix_obj = matrix_obj,
+            .start_row = start_row,
+            .num_rows = this_rows,
+			.seed = seed
+        };
+		start_row += this_rows;
+    }
+
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+        pthread_create(thread_ids + i, NULL, random_worker, args + i);
+    }
+
+	register uint32_t min = UINT32_MAX;
+	register uint32_t max = 0;
+	register uint32_t sum = 0;
+
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+        pthread_join(*(thread_ids + i), NULL);
+		sum += *(sums + i);
+		if(*(mins + i) < min) min = *(mins + i);
+		if(*(maxes + i) > max) max = *(maxes + i);
+    }
+
+	matrix_obj->min = min;
+	matrix_obj->max = max;
+	matrix_obj->sum = sum;
+
+	free(args);
+
+	return matrix_obj;
 }
 
 
@@ -272,34 +409,32 @@ inline uint32_t *random_matrix(const uint32_t seed)
  * Returns new matrix with all elements set to given value
 */
 // /* Serial uniform implementation
-static inline uint32_t *uniform_matrix_serial(register uint32_t value)
+static inline matrix_t *uniform_matrix_serial(register uint32_t value)
 {
 	if(value == 0)
 	{
 		return new_matrix();
 	}
 
-	// Try memset ======================================================================================================
-
-	uint32_t *matrix = new_matrix_malloc();
-	register uint32_t *matrix_cpy = matrix;
+	matrix_t *matrix_obj = new_matrix_malloc();
+	register uint32_t *matrix_cpy = matrix_obj->data;
 
 	for(register uint32_t i = g_elements; i--;)
 	{
 		*matrix_cpy++ = value;
 	}
 
-	SET_MIN(matrix, value);
-	SET_MAX(matrix, value);
-	SET_SUM(matrix, value * g_elements);
+	matrix_obj->min = value;
+	matrix_obj->max = value;
+	matrix_obj->sum = value * g_elements;
 
-	return matrix;
+	return matrix_obj;
 }
 // */
 // /* Parallel uniform implementaion
 struct uniform_argument
 {
-	uint32_t *matrix;
+	matrix_t *matrix_obj;
 	uint32_t value;
 	uint32_t start_row;
 	uint32_t num_rows;
@@ -308,7 +443,7 @@ struct uniform_argument
 static inline void *uniform_worker(void *arg)
 {
 	struct uniform_argument *arguments = (struct uniform_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *matrix = arguments->matrix_obj->data;
 	register uint32_t value = arguments->value;
 	matrix += arguments->start_row * g_width;
 
@@ -320,20 +455,19 @@ static inline void *uniform_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *uniform_matrix(register uint32_t value)
+matrix_t *uniform_matrix(register uint32_t value)
 {
 	if(value == 0)
 	{
 		return new_matrix();
 	}
 
-	// Single thread or threshold
 	if(g_nthreads == 1 || g_width < 200)
 	{
 		return uniform_matrix_serial(value);
 	}
 
-	uint32_t *matrix = new_matrix_malloc();
+	matrix_t *matrix_obj = new_matrix_malloc();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -345,7 +479,7 @@ inline uint32_t *uniform_matrix(register uint32_t value)
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct uniform_argument)
 		{
-            .matrix = matrix,
+            .matrix_obj = matrix_obj,
             .start_row = start_row,
             .num_rows = this_rows,
 			.value = value
@@ -358,26 +492,26 @@ inline uint32_t *uniform_matrix(register uint32_t value)
         pthread_create(thread_ids + i, NULL, uniform_worker, args + i);
     }
 
-	SET_MIN(matrix, value);
-	SET_MAX(matrix, value);
-	SET_SUM(matrix, value * g_elements);
+	matrix_obj->min = value;
+	matrix_obj->max = value;
+	matrix_obj->sum = value * g_elements;
 
 	for(register uint32_t i = g_nthreads; i--;)
 	{
         pthread_join(*(thread_ids + i), NULL);
     }
 
-	return matrix;
+	return matrix_obj;
 }
 // */
 
 /**
  * Returns new matrix with elements in sequence from given start and step
  */
-static inline uint32_t *sequence_matrix_serial(const uint32_t start, const register uint32_t step)
+static inline matrix_t *sequence_matrix_serial(const uint32_t start, const register uint32_t step)
 {
-	uint32_t *matrix = new_matrix_malloc();
-	register uint32_t *matrix_cpy = matrix;
+	matrix_t *matrix_obj = new_matrix_malloc();
+	register uint32_t *matrix_cpy = matrix_obj->data;
 
 	register uint32_t curr_value = start;
 
@@ -395,17 +529,17 @@ static inline uint32_t *sequence_matrix_serial(const uint32_t start, const regis
 		curr_value += step;
 	}
 
-	SET_MIN(matrix, min);
-	SET_MAX(matrix, max);
-	SET_SUM(matrix, sum);
+	matrix_obj->min = min;
+	matrix_obj->max = max;
+	matrix_obj->sum = sum;
 
 
-	return matrix;
+	return matrix_obj;
 }
 
 struct sequence_argument
 {
-	uint32_t *matrix;
+	matrix_t *matrix_obj;
 	uint32_t start_value;
 	uint32_t increment;
 	uint32_t start_row;
@@ -419,7 +553,7 @@ struct sequence_argument
 static inline void *sequence_worker(void *arg)
 {
 	struct sequence_argument *arguments = (struct sequence_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *matrix = arguments->matrix_obj->data;
 	register uint32_t increment = arguments->increment;
 	register uint32_t curr_value = arguments->start_value + increment * arguments->start_row * g_width;
 	matrix += arguments->start_row * g_width;
@@ -445,7 +579,7 @@ static inline void *sequence_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
+matrix_t *sequence_matrix(const uint32_t start, const uint32_t step)
 {
 	if(step == 0)
 	{
@@ -462,7 +596,7 @@ inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
 	}
 
 	struct sequence_argument *args = malloc(sizeof(struct sequence_argument) * g_nthreads);
-	uint32_t *matrix = new_matrix_malloc();
+	matrix_t *matrix_obj = new_matrix_malloc();
 
 	register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
 	register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
@@ -476,7 +610,7 @@ inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct sequence_argument)
 		{
-            .matrix = matrix,
+            .matrix_obj = matrix_obj,
             .start_row = start_row,
             .num_rows = this_rows,
 			.start_value = start,
@@ -506,13 +640,13 @@ inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
 
-	SET_MIN(matrix, min);
-	SET_MAX(matrix, max);
-	SET_SUM(matrix, sum);
+	matrix_obj->min = min;
+	matrix_obj->max = max;
+	matrix_obj->sum = sum;
 
 	free(args);
 
-	return matrix;
+	return matrix_obj;
 }
 
 ////////////////////////////////
@@ -522,22 +656,22 @@ inline uint32_t *sequence_matrix(const uint32_t start, const uint32_t step)
 /**
  * Returns new matrix with elements cloned from given matrix
  */
-static inline uint32_t *cloned_serial(register uint32_t *matrix)
+static inline matrix_t *cloned_serial(register matrix_t *matrix_obj)
 {
-	register uint32_t *result = new_matrix_malloc();
-	memcpy((void *)result, (void *)matrix, g_elements * sizeof(uint32_t));
+	register matrix_t *result_obj = new_matrix_malloc();
+	memcpy((void *)result_obj->data, (void *)matrix_obj->data, g_elements * sizeof(uint32_t));
 
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
+	result_obj->min = matrix_obj->min;
+	result_obj->max = matrix_obj->max;
+	result_obj->sum = matrix_obj->sum;
 
-	return result;
+	return result_obj;
 }
 
 struct clone_argument
 {
-	uint32_t *matrix;
-	uint32_t *result;
+	matrix_t *matrix_obj;
+	matrix_t *result_obj;
 	uint32_t start_row;
 	uint32_t num_rows;
 };
@@ -545,8 +679,8 @@ struct clone_argument
 static inline void *clone_worker(void *arg)
 {
 	struct clone_argument *arguments = (struct clone_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	register uint32_t *result = arguments->result;
+	register uint32_t *matrix = arguments->matrix_obj->data;
+	register uint32_t *result = arguments->result_obj->data;
 
 	matrix += arguments->start_row * g_width;
 	result += arguments->start_row * g_width;
@@ -564,14 +698,14 @@ static inline void *clone_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *cloned(register uint32_t *matrix) {
+matrix_t *cloned(register matrix_t *matrix_obj) {
 
 	if(g_nthreads == 1)
 	{
-		return cloned_serial(matrix);
+		return cloned_serial(matrix_obj);
 	}
 
-	register uint32_t *result = new_matrix_malloc();
+	register matrix_t *result_obj = new_matrix_malloc();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -582,8 +716,8 @@ inline uint32_t *cloned(register uint32_t *matrix) {
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct clone_argument)
 		{
-            .matrix = matrix,
-			.result = result,
+            .matrix_obj = matrix_obj,
+			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows
         };
@@ -600,41 +734,42 @@ inline uint32_t *cloned(register uint32_t *matrix) {
         pthread_join(*(thread_ids + i), NULL);
     }
 
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
+	result_obj->min = matrix_obj->min;
+	result_obj->max = matrix_obj->max;
+	result_obj->sum = matrix_obj->sum;
 
 	free(args);
 
-	return result;
+	return result_obj;
 }
 
 /**
  * Returns new matrix with elements ordered in reverse
  */
 
-static inline uint32_t *reversed_serial(uint32_t *matrix)
+static inline matrix_t *reversed_serial(matrix_t *matrix_obj)
 {
-	register uint32_t *matrix_cpy = matrix;
-	register uint32_t *result = new_matrix_malloc();
-	matrix += g_elements - 1;
+	register matrix_t *result_obj = new_matrix_malloc();
+	register uint32_t *result = result_obj->data;
+	register uint32_t *matrix_cpy = matrix_obj->data;
+	matrix_cpy += g_elements - 1;
 
 	for(register uint32_t i = g_elements; i--;)
 	{
 		*result++ = *matrix_cpy--;
 	}
 
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
+	result_obj->min = matrix_obj->min;
+	result_obj->max = matrix_obj->max;
+	result_obj->sum = matrix_obj->sum;
 
-	return result;
+	return result_obj;
 }
 
 struct reverse_argument
 {
-	uint32_t *result;
-	uint32_t *matrix;
+	matrix_t *result_obj;
+	matrix_t *matrix_obj;
 	uint32_t num_rows;
 	uint32_t start_row;
 };
@@ -642,8 +777,8 @@ struct reverse_argument
 static inline void *reverse_worker(void *arg)
 {
 	struct reverse_argument *arguments = (struct reverse_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	register uint32_t *result = arguments->result;
+	register uint32_t *matrix = arguments->matrix_obj->data;
+	register uint32_t *result = arguments->result_obj->data;
 	result += arguments->start_row * g_width;
 	matrix += g_elements - arguments->start_row * g_width - 1;
 
@@ -655,14 +790,14 @@ static inline void *reverse_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *reversed(uint32_t *matrix)
+matrix_t *reversed(matrix_t *matrix_obj)
 {
 	if(g_nthreads == 1 || g_width < 200)
 	{
-		return reversed_serial(matrix);
+		return reversed_serial(matrix_obj);
 	}
 
-	uint32_t *result = new_matrix_malloc();
+	matrix_t *result_obj = new_matrix_malloc();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -673,8 +808,8 @@ inline uint32_t *reversed(uint32_t *matrix)
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct reverse_argument)
 		{
-            .matrix = matrix,
-			.result = result,
+            .matrix_obj = matrix_obj,
+			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows
         };
@@ -691,13 +826,13 @@ inline uint32_t *reversed(uint32_t *matrix)
         pthread_join(*(thread_ids + i), NULL);
     }
 
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
+	result_obj->min = matrix_obj->min;
+	result_obj->max = matrix_obj->max;
+	result_obj->sum = matrix_obj->sum;
 
 	free(args);
 
-	return result;
+	return result_obj;
 }
 
 /**
@@ -706,8 +841,8 @@ inline uint32_t *reversed(uint32_t *matrix)
 
 struct transpose_argument
 {
-	uint32_t *matrix;
-	uint32_t *result;
+	matrix_t *matrix_obj;
+	matrix_t *result_obj;
 	uint32_t num_rows;
 	uint32_t start_row;
 };
@@ -715,8 +850,8 @@ struct transpose_argument
 static inline void *transpose_worker(void *arg)
 {
 	struct transpose_argument *arguments = (struct transpose_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	register uint32_t *result = arguments->result;
+	register uint32_t *matrix = arguments->matrix_obj->data;
+	register uint32_t *result = arguments->result_obj->data;
 
 	register uint32_t curr_y = arguments->start_row;
 	for(register uint32_t num_rows = arguments->num_rows; num_rows--;)
@@ -732,15 +867,15 @@ static inline void *transpose_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *transposed(register uint32_t* matrix)
+matrix_t *transposed(register matrix_t *matrix_obj)
 {
-	register uint32_t *identity = identity_matrix();
-	if(memcmp(matrix, identity, sizeof(uint32_t) * g_elements) == 0)
+	register matrix_t *identity_obj = identity_matrix();
+	if(memcmp(matrix_obj->data, identity_obj->data, sizeof(uint32_t) * g_elements) == 0)
 	{
-		return cloned(matrix);
+		return cloned(matrix_obj);
 	}
 
-	uint32_t *result = new_matrix_malloc();
+	matrix_t *result_obj = new_matrix_malloc();
 	pthread_t thread_ids[g_nthreads];
 
 	struct transpose_argument *args = malloc(sizeof(struct transpose_argument) * g_nthreads);
@@ -750,8 +885,8 @@ inline uint32_t *transposed(register uint32_t* matrix)
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct transpose_argument)
 		{
-            .matrix = matrix,
-			.result = result,
+            .matrix_obj = matrix_obj,
+			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows
         };
@@ -768,23 +903,24 @@ inline uint32_t *transposed(register uint32_t* matrix)
         pthread_join(*(thread_ids + i), NULL);
     }
 
-	SET_MIN(result, GET_MIN(matrix));
-	SET_MAX(result, GET_MAX(matrix));
-	SET_SUM(result, GET_SUM(matrix));
+	result_obj->min = matrix_obj->min;
+	result_obj->max = matrix_obj->max;
+	result_obj->sum = matrix_obj->sum;
 
 	free(args);
 
-	return result;
+	return result_obj;
 }
 
 /**
  * Returns new matrix with scalar added to each element
  */
 
-static inline uint32_t *scalar_add_serial(uint32_t *matrix, register uint32_t scalar)
+static inline matrix_t *scalar_add_serial(matrix_t *matrix_obj, register uint32_t scalar)
 {
-	register uint32_t *result = new_matrix_malloc();
-	register uint32_t *result_cpy = result;
+	register matrix_t *result_obj = new_matrix_malloc();
+	register uint32_t *result_cpy = result_obj->data;
+	register uint32_t *matrix = matrix_obj->data;
 
 	register uint32_t min = UINT32_MAX;
 	register uint32_t max = 0;
@@ -799,17 +935,17 @@ static inline uint32_t *scalar_add_serial(uint32_t *matrix, register uint32_t sc
 		++result_cpy;
 	}
 
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
+	result_obj->min = min;
+	result_obj->max = max;
+	result_obj->sum = sum;
 
-	return result;
+	return result_obj;
 }
 
 struct scalar_add_argument
 {
-	uint32_t *matrix;
-	uint32_t *result;
+	matrix_t *matrix_obj;
+	matrix_t *result_obj;
 	uint32_t *mins;
 	uint32_t *maxes;
 	uint32_t *sums;
@@ -822,8 +958,8 @@ struct scalar_add_argument
 static inline void *scalar_add_worker(void *arg)
 {
 	struct scalar_add_argument *arguments = (struct scalar_add_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	register uint32_t *result = arguments->result;
+	register uint32_t *matrix = arguments->matrix_obj->data;
+	register uint32_t *result = arguments->result_obj->data;
 	const register uint32_t scalar = arguments->scalar;
 
 	matrix += arguments->start_row * g_width;
@@ -849,14 +985,14 @@ static inline void *scalar_add_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t scalar)
+matrix_t *scalar_add(register matrix_t *matrix_obj, const register uint32_t scalar)
 {
 	if(g_nthreads == 1 || g_width < 200)
 	{
-		return scalar_add_serial(matrix, scalar);
+		return scalar_add_serial(matrix_obj, scalar);
 	}
 
-	register uint32_t *result = new_matrix_malloc();
+	register matrix_t *result_obj = new_matrix_malloc();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -870,8 +1006,8 @@ inline uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t s
 	{
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct scalar_add_argument) {
-            .matrix = matrix,
-			.result = result,
+            .matrix_obj = matrix_obj,
+			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows,
 			.scalar = scalar,
@@ -900,13 +1036,13 @@ inline uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t s
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
 
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
+	result_obj->min = min;
+	result_obj->max = max;
+	result_obj->sum = sum;
 
 	free(args);
 
-	return result;
+	return result_obj;
 }
 
 /**
@@ -914,8 +1050,8 @@ inline uint32_t *scalar_add(register uint32_t *matrix, const register uint32_t s
  */
 struct scalar_mul_argument
 {
-	uint32_t *matrix;
-	uint32_t *result;
+	matrix_t *matrix_obj;
+	matrix_t *result_obj;
 	uint32_t *mins;
 	uint32_t *maxes;
 	uint32_t *sums;
@@ -928,8 +1064,8 @@ struct scalar_mul_argument
 static inline void *scalar_mul_worker(void *arg)
 {
 	struct scalar_mul_argument *arguments = (struct scalar_mul_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	register uint32_t *result = arguments->result;
+	register uint32_t *matrix = arguments->matrix_obj->data;
+	register uint32_t *result = arguments->result_obj->data;
 	const register uint32_t scalar = arguments->scalar;
 
 	matrix += arguments->start_row * g_width;
@@ -955,9 +1091,9 @@ static inline void *scalar_mul_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t scalar)
+matrix_t *scalar_mul(register matrix_t *matrix_obj, const register uint32_t scalar)
 {
-	register uint32_t *result = new_matrix_malloc();
+	register matrix_t *result_obj = new_matrix_malloc();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -971,8 +1107,8 @@ inline uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t s
 	{
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct scalar_mul_argument) {
-            .matrix = matrix,
-			.result = result,
+            .matrix_obj = matrix_obj,
+			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows,
 			.scalar = scalar,
@@ -1002,13 +1138,13 @@ inline uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t s
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
 
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
+	result_obj->min = min;
+	result_obj->max = max;
+	result_obj->sum = sum;
 
 	free(args);
 
-	return result;
+	return result_obj;
 }
 
 /**
@@ -1016,9 +1152,9 @@ inline uint32_t *scalar_mul(register uint32_t *matrix, const register uint32_t s
  */
 struct matrix_add_argument
 {
-	uint32_t *matrix_a;
-	uint32_t *matrix_b;
-	uint32_t *result;
+	matrix_t *matrix_a_obj;
+	matrix_t *matrix_b_obj;
+	matrix_t *result_obj;
 	uint32_t *mins;
 	uint32_t *maxes;
 	uint32_t *sums;
@@ -1030,16 +1166,16 @@ struct matrix_add_argument
 static inline void *matrix_add_worker(void *arg)
 {
 	struct matrix_add_argument *arguments = (struct matrix_add_argument *)arg;
-	register uint32_t *matrix_a = arguments->matrix_a;
-	register uint32_t *matrix_b = arguments->matrix_b;
-	register uint32_t *result = arguments->result;
+	register uint32_t *matrix_a = arguments->matrix_a_obj->data;
+	register uint32_t *matrix_b = arguments->matrix_b_obj->data;
+	register uint32_t *result = arguments->result_obj->data;
 
 	matrix_a += arguments->start_row * g_width;
 	matrix_b += arguments->start_row * g_width;
 	result += arguments->start_row * g_width;
 
-	register uint32_t min = *matrix_a + *matrix_b;
-	register uint32_t max = *matrix_a + *matrix_b;
+	register uint32_t min = UINT32_MAX;
+	register uint32_t max = 0;
 	register uint32_t sum = 0;
 
 	for(register uint32_t i = arguments->num_rows * g_width; i--;)
@@ -1058,9 +1194,9 @@ static inline void *matrix_add_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t *matrix_add(uint32_t *matrix_a, uint32_t *matrix_b)
+matrix_t *matrix_add(matrix_t *matrix_a_obj, matrix_t *matrix_b_obj)
 {
-	uint32_t *result = new_matrix_malloc();
+	matrix_t *result_obj = new_matrix_malloc();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -1075,9 +1211,9 @@ inline uint32_t *matrix_add(uint32_t *matrix_a, uint32_t *matrix_b)
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct matrix_add_argument)
 		{
-            .matrix_a = matrix_a,
-            .matrix_b = matrix_b,
-			.result = result,
+            .matrix_a_obj = matrix_a_obj,
+            .matrix_b_obj = matrix_b_obj,
+			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows,
 			.mins = mins,
@@ -1106,13 +1242,13 @@ inline uint32_t *matrix_add(uint32_t *matrix_a, uint32_t *matrix_b)
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
 
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
+	result_obj->min = min;
+	result_obj->max = max;
+	result_obj->sum = sum;
 
 	free(args);
 
-	return result;
+	return result_obj;
 }
 
 /**
@@ -1121,9 +1257,9 @@ inline uint32_t *matrix_add(uint32_t *matrix_a, uint32_t *matrix_b)
 
 struct matrix_mul_argument
 {
-	uint32_t *matrix_a;
-	uint32_t *matrix_b;
-	uint32_t *result;
+	matrix_t *matrix_a_obj;
+	matrix_t *matrix_b_obj;
+	matrix_t *result_obj;
 	uint32_t *mins;
 	uint32_t *maxes;
 	uint32_t *sums;
@@ -1136,9 +1272,9 @@ struct matrix_mul_argument
 static inline void *matrix_mul_worker(void *arg)
 {
 	struct matrix_mul_argument *arguments = (struct matrix_mul_argument *)arg;
-	register uint32_t *matrix_a = arguments->matrix_a;
-	register uint32_t *matrix_b = arguments->matrix_b;
-	register uint32_t *result = arguments->result;
+	register uint32_t *matrix_a = arguments->matrix_a_obj->data;
+	register uint32_t *matrix_b = arguments->matrix_b_obj->data;
+	register uint32_t *result = arguments->result_obj->data;
 
 	register uint32_t min = UINT32_MAX;
 	register uint32_t max = 0;
@@ -1195,15 +1331,15 @@ static inline void *matrix_mul_worker(void *arg)
 }
 // */
 
-// /* SSE worker
+// /* Add SSE worker
 
 
 // */
 // /*
-inline uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matrix_b)
+matrix_t *matrix_mul(register matrix_t *matrix_a_obj, register matrix_t *matrix_b_obj)
 {
-	uint32_t *result = new_matrix_malloc();
-	uint32_t *matrix_b_t = transposed(matrix_b); // remove for std
+	matrix_t *result_obj = new_matrix_malloc();
+	matrix_t *matrix_b_t_obj = transposed(matrix_b_obj); // remove for std
 
 	register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
 	register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
@@ -1217,9 +1353,9 @@ inline uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matr
 	{
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct matrix_mul_argument) {
-            .matrix_a = matrix_a,
-            .matrix_b = matrix_b_t, // matrix_b
-			.result = result,
+            .matrix_a_obj = matrix_a_obj,
+            .matrix_b_obj = matrix_b_t_obj, // matrix_b
+			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows,
             .mins = mins,
@@ -1248,13 +1384,13 @@ inline uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matr
 		if(*(maxes + i) > max) max = *(maxes + i);
     }
 
-	SET_MIN(result, min);
-	SET_MAX(result, max);
-	SET_SUM(result, sum);
+	result_obj->min = min;
+	result_obj->max = max;
+	result_obj->sum = sum;
 
 	free(args);
 
-	return result;
+	return result_obj;
 
 }
 // */
@@ -1262,12 +1398,12 @@ inline uint32_t *matrix_mul(register uint32_t *matrix_a, register uint32_t *matr
 /**
  * Returns new matrix, powering the matrix to the exponent
  */
-void pow_rubbish_add(uint32_t *garbage)
+static inline void pow_rubbish_add(matrix_t *garbage)
 {
 	pow_rubbish[rubbish_counter++] = garbage;
 }
 
-void empty_rubbish(uint32_t *exception)
+static inline void empty_rubbish(matrix_t *exception)
 {
 	for(uint32_t i = rubbish_counter; i--;)
 	{
@@ -1280,6 +1416,7 @@ void empty_rubbish(uint32_t *exception)
 					pow_rubbish[j] = 0;
 				}
 			}
+			free(pow_rubbish[i]->data);
 			free(pow_rubbish[i]);
 			pow_rubbish[i] = 0;
 		}
@@ -1288,35 +1425,35 @@ void empty_rubbish(uint32_t *exception)
 	rubbish_counter = 0;
 }
 
-uint32_t *m_pow(register uint32_t *matrix, register uint32_t exponent)
+static inline matrix_t *m_pow(register matrix_t *matrix_obj, register uint32_t exponent)
 {
 	if(exponent == 1)
 	{
-		return matrix;
+		return matrix_obj;
 	}
 	else
 	{
-		register uint32_t *identity = identity_matrix();
-		if(memcmp(matrix, identity, g_elements * sizeof(uint32_t)) == 0)
+		register matrix_t *identity_obj = identity_matrix();
+		if(memcmp(matrix_obj->data, identity_obj->data, g_elements * sizeof(uint32_t)) == 0)
 		{
-			return identity;
+			return identity_obj;
 		}
-		register uint32_t *ret = m_pow(matrix, exponent >> 1);
-		if(ret != matrix)
+		register matrix_t *ret = m_pow(matrix_obj, exponent >> 1);
+		if(ret != matrix_obj)
 		{
 			pow_rubbish_add(ret);
 		}
 		if((exponent & 1) == 0)
 		{
-			register uint32_t *passon = matrix_mul(ret, ret);
+			register matrix_t *passon = matrix_mul(ret, ret);
 			pow_rubbish_add(passon);
 			return passon;
 		}
 		else
 		{
-			register uint32_t *passon_inside = matrix_mul(ret, ret);
+			register matrix_t *passon_inside = matrix_mul(ret, ret);
 			pow_rubbish_add(passon_inside);
-			register uint32_t *passon = matrix_mul(matrix, passon_inside);
+			register matrix_t *passon = matrix_mul(matrix_obj, passon_inside);
 			pow_rubbish_add(passon);
 			return passon;
 		}
@@ -1325,11 +1462,11 @@ uint32_t *m_pow(register uint32_t *matrix, register uint32_t exponent)
 
 
 
-uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
+matrix_t *matrix_pow(matrix_t *matrix_obj, const uint32_t exponent)
 {
 	if(exponent == 1)
 	{
-		return cloned(matrix);
+		return cloned(matrix_obj);
 	}
 
 	if(!exponent)
@@ -1337,14 +1474,14 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 		return identity_matrix();
 	}
 
-	register uint32_t *identity = identity_matrix();
-	if(memcmp(matrix, identity, g_elements * sizeof(uint32_t)) == 0)
+	register matrix_t *identity_obj = identity_matrix();
+	if(memcmp(matrix_obj->data, identity_obj->data, g_elements * sizeof(uint32_t)) == 0)
 	{
 		return identity_matrix();
 	}
 
 
-	register uint32_t *ret = m_pow(matrix, exponent);
+	register matrix_t *ret = m_pow(matrix_obj, exponent);
 	empty_rubbish(ret);
 	return ret;
 
@@ -1357,85 +1494,22 @@ uint32_t *matrix_pow(uint32_t *matrix, const uint32_t exponent)
 /**
  * Returns the sum of all elements
  */
-struct get_sum_argument
+
+uint32_t get_sum(register matrix_t *matrix_obj)
 {
-	uint32_t *matrix;
-	uint32_t *result;
-	uint32_t num_rows;
-	uint32_t start_row;
-	uint32_t id;
-};
-/*
-static inline void *get_sum_worker(void *arg)
-{
-	struct get_sum_argument *arguments = (struct get_sum_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	matrix += arguments->start_row * g_width;
-
-	register uint32_t total = 0;
-	for(register uint32_t i = arguments->num_rows * g_width; i--;)
-	{
-		total += *matrix++;
-	}
-	arguments->result[arguments->id] = total;
-
-	return NULL;
-}
-*/
-inline uint32_t get_sum(register uint32_t *matrix)
-{
-	return GET_SUM(matrix);
-	/*
-	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
-
-	pthread_t thread_ids[g_nthreads];
-
-	struct get_sum_argument *args = malloc(sizeof(struct get_sum_argument) * g_nthreads);
-	register uint32_t start_row = 0;
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-		register uint32_t this_rows = ALLOCATE_ROWS(i);
-        args[i] = (struct get_sum_argument) {
-            .matrix = matrix,
-			.result = result,
-            .start_row = start_row,
-            .num_rows = this_rows,
-			.id = i
-        };
-		start_row += this_rows;
-    }
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_create(thread_ids + i, NULL, get_sum_worker, args + i);
-    }
-
-	register uint32_t total = 0;
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_join(*(thread_ids + i), NULL);
-		total += *(result + i);
-    }
-
-	free(args);
-	free(result);
-
-	return total;
-	*/
-
+	return matrix_obj->sum;
 }
 
 /**
  * Returns the trace of the matrix
  */
-inline uint32_t get_trace(register uint32_t *matrix)
+uint32_t get_trace(register matrix_t *matrix_obj)
 {
 	register uint32_t total = 0;
 	register uint32_t gap = g_width + 1;
-	register uint32_t i = g_height;
+	register uint32_t *matrix = matrix_obj->data;
 
-	while(i--)
+	for(register uint32_t i = g_height; i--;)
 	{
 		total += *matrix;
 		matrix += gap;
@@ -1447,150 +1521,27 @@ inline uint32_t get_trace(register uint32_t *matrix)
 /**
  * Returns the smallest value in the matrix
  */
-struct get_min_argument
+
+uint32_t get_minimum(register matrix_t *matrix_obj)
 {
-	uint32_t *matrix;
-	uint32_t *result;
-	uint32_t num_rows;
-	uint32_t start_row;
-	uint32_t id;
-};
-/*
-static inline void *get_min_worker(void *arg)
-{
-	struct get_min_argument *arguments = (struct get_min_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	matrix += arguments->start_row * g_width;
-	register uint32_t min = *matrix;
-	for(register uint32_t i = arguments->num_rows * g_width; i--;)
-	{
-		min = *matrix < min ? *matrix : min;
-		++matrix;
-	}
-	arguments->result[arguments->id] = min;
-	return NULL;
-}
-*/
-inline uint32_t get_minimum(register uint32_t *matrix)
-{
-	return GET_MIN(matrix);
-	/*
-	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
-
-	pthread_t thread_ids[g_nthreads];
-
-	struct get_min_argument *args = malloc(sizeof(struct get_min_argument) * g_nthreads);
-	register uint32_t start_row = 0;
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-		register uint32_t this_rows = ALLOCATE_ROWS(i);
-        args[i] = (struct get_min_argument) {
-            .matrix = matrix,
-			.result = result,
-            .start_row = start_row,
-            .num_rows = this_rows,
-			.id = i
-        };
-		start_row += this_rows;
-    }
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_create(thread_ids + i, NULL, get_min_worker, args + i);
-    }
-
-	register uint32_t min = *matrix;
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_join(*(thread_ids + i), NULL);
-		min = *(result + i) < min ? *(result + i) : min;
-    }
-
-	free(result);
-
-	return min;
-	*/
+	return matrix_obj->min;
 }
 
 /**
  * Returns the largest value in the matrix
  */
-
-struct get_max_argument
+uint32_t get_maximum(register matrix_t *matrix_obj)
 {
-	uint32_t *matrix;
-	uint32_t *result;
-	uint32_t num_rows;
-	uint32_t start_row;
-	uint32_t id;
-};
-/*
-static inline void *get_max_worker(void *arg)
-{
-	struct get_max_argument *arguments = (struct get_max_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
-	matrix += arguments->start_row * g_width;
-	register uint32_t max = *matrix;
-	for(register uint32_t i = arguments->num_rows * g_width; i--;)
-	{
-		max = *matrix > max ? *matrix : max;
-		++matrix;
-	}
-	arguments->result[arguments->id] = max;
-	return NULL;
-}
-*/
-inline uint32_t get_maximum(register uint32_t *matrix)
-{
-	return GET_MAX(matrix);
-	/*
-	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
-
-	pthread_t thread_ids[g_nthreads];
-
-	struct get_max_argument *args = malloc(sizeof(struct get_max_argument) * g_nthreads);
-	register uint32_t start_row = 0;
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-		register uint32_t this_rows = ALLOCATE_ROWS(i);
-        args[i] = (struct get_max_argument) {
-            .matrix = matrix,
-			.result = result,
-            .start_row = start_row,
-            .num_rows = this_rows,
-			.id = i
-        };
-		start_row += this_rows;
-    }
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_create(thread_ids + i, NULL, get_max_worker, args + i);
-    }
-
-	register uint32_t max = *matrix;
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_join(*(thread_ids + i), NULL);
-		max = *(result + i) > max ? *(result + i) : max;
-    }
-
-	free(result);
-
-	return max;
-	*/
+	return matrix_obj->max;
 }
 
 /**
  * Returns the frequency of the value in the matrix
  */
 
-
 struct get_cmpe_argument
 {
-	uint32_t *matrix;
+	matrix_t *matrix_obj;
 	uint32_t *result;
 	uint32_t num_rows;
 	uint32_t start_row;
@@ -1601,7 +1552,7 @@ struct get_cmpe_argument
 static inline void *get_cmpe_worker(void *arg)
 {
 	struct get_cmpe_argument *arguments = (struct get_cmpe_argument *)arg;
-	register uint32_t *matrix = arguments->matrix;
+	register uint32_t *matrix = arguments->matrix_obj->data;
 	matrix += arguments->start_row * g_width;
 	register uint32_t value = arguments->value;
 	register uint32_t count = 0;
@@ -1613,8 +1564,12 @@ static inline void *get_cmpe_worker(void *arg)
 	return NULL;
 }
 
-inline uint32_t get_frequency(register uint32_t *matrix, register uint32_t value)
+uint32_t get_frequency(register matrix_t *matrix_obj, register uint32_t value)
 {
+
+
+
+
 	register uint32_t *result = malloc(g_nthreads * sizeof(uint32_t));
 
 	pthread_t thread_ids[g_nthreads];
@@ -1625,7 +1580,7 @@ inline uint32_t get_frequency(register uint32_t *matrix, register uint32_t value
 	{
 		register uint32_t this_rows = ALLOCATE_ROWS(i);
         args[i] = (struct get_cmpe_argument) {
-            .matrix = matrix,
+            .matrix_obj = matrix_obj,
 			.result = result,
             .start_row = start_row,
             .num_rows = this_rows,
@@ -1649,6 +1604,8 @@ inline uint32_t get_frequency(register uint32_t *matrix, register uint32_t value
     }
 
 	free(result);
+
+
 
 	return count;
 }
