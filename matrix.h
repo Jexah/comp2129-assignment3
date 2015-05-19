@@ -5,11 +5,10 @@
 
 /* utility functions */
 
-
 typedef struct occurances_t
 {
-	uint32_t key;
-	uint32_t value;
+	uint32_t *data;
+	char prev_operation;
 } occurances_t;
 
 typedef struct matrix_t
@@ -20,6 +19,13 @@ typedef struct matrix_t
 	uint32_t sum;
 	occurances_t *occurances;
 } matrix_t;
+
+typedef struct kvp_t
+{
+	uint32_t key;
+	uint32_t value;
+} kvp_t;
+
 
 void set_seed(uint32_t value);
 void set_nthreads(ssize_t count);

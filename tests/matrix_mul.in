@@ -6,4 +6,16 @@ set c = matrix#mul a b
 show c
 set d = matrix#mul b c
 show d
+set e = matrix#mul c d
+show e
+set f = matrix#mul d e
+show f
+set g = matrix#mul e f
+show g
+set h = matrix#mul f g
+show h
+set i = matrix#mul g h
+show i
+set j = matrix#mul h i
+show j
 bye
