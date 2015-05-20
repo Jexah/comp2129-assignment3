@@ -1,0 +1,9 @@
+set a = random 5231
+compute sum a
+set b = random 5223531
+compute sum b
+set c = random 5262631
+compute sum c
+set d = random 5484231
+compute sum d
+bye

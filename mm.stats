@@ -2,21 +2,8 @@ Flat profile:
 
 Each sample counts as 0.01 seconds.
   %   cumulative   self              self     total           
- time   seconds   seconds    calls  ms/call  ms/call  name    
- 60.66      0.63     0.63        4   157.72   242.84  random_matrix
- 32.74      0.97     0.34 399920004     0.00     0.00  fast_rand
-  6.74      1.04     0.07                             main
-  0.00      1.04     0.00        4     0.00     0.00  add_entry
-  0.00      1.04     0.00        4     0.00   242.84  command_set
-  0.00      1.04     0.00        4     0.00     0.00  find_entry
-  0.00      1.04     0.00        4     0.00     0.00  new_matrix
-  0.00      1.04     0.00        4     0.00     0.00  set_seed
-  0.00      1.04     0.00        1     0.00     0.00  command_bye
-  0.00      1.04     0.00        1     0.00   971.35  compute_engine
-  0.00      1.04     0.00        1     0.00     0.00  define_settings
-  0.00      1.04     0.00        1     0.00     0.00  release
-  0.00      1.04     0.00        1     0.00     0.00  set_dimensions
-  0.00      1.04     0.00        1     0.00     0.00  set_nthreads
+ time   seconds   seconds    calls  Ts/call  Ts/call  name    
+100.04      1.43     1.43                             _fini
 
  %         the percentage of the total running time of the
 time       program used by this function.
@@ -45,7 +32,7 @@ name       the name of the function.  This is the minor sort
 	   in parenthesis it shows where it would appear in
 	   the gprof listing if it were to be printed.
 
-Copyright (C) 2012-2014 Free Software Foundation, Inc.
+Copyright (C) 2012 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright
@@ -54,63 +41,12 @@ notice and this notice are preserved.
 		     Call graph (explanation follows)
 
 
-granularity: each sample hit covers 2 byte(s) for 0.96% of 1.04 seconds
+granularity: each sample hit covers 2 byte(s) for 0.70% of 1.43 seconds
 
 index % time    self  children    called     name
-                                                 <spontaneous>
-[1]    100.0    0.07    0.97                 main [1]
-                0.00    0.97       1/1           compute_engine [4]
-                0.00    0.00       1/1           define_settings [11]
------------------------------------------------
-                0.00    0.97       4/4           compute_engine [4]
-[2]     93.3    0.00    0.97       4         command_set [2]
-                0.63    0.34       4/4           random_matrix [3]
-                0.00    0.00       4/4           find_entry [7]
-                0.00    0.00       4/4           add_entry [6]
------------------------------------------------
-                0.63    0.34       4/4           command_set [2]
-[3]     93.3    0.63    0.34       4         random_matrix [3]
-                0.34    0.00 399920004/399920004     fast_rand [5]
-                0.00    0.00       4/4           new_matrix [8]
-                0.00    0.00       4/4           set_seed [9]
------------------------------------------------
-                0.00    0.97       1/1           main [1]
-[4]     93.3    0.00    0.97       1         compute_engine [4]
-                0.00    0.97       4/4           command_set [2]
-                0.00    0.00       1/1           command_bye [10]
------------------------------------------------
-                0.34    0.00 399920004/399920004     random_matrix [3]
-[5]     32.7    0.34    0.00 399920004         fast_rand [5]
------------------------------------------------
-                0.00    0.00       4/4           command_set [2]
-[6]      0.0    0.00    0.00       4         add_entry [6]
------------------------------------------------
-                0.00    0.00       4/4           command_set [2]
-[7]      0.0    0.00    0.00       4         find_entry [7]
------------------------------------------------
-                0.00    0.00       4/4           random_matrix [3]
-[8]      0.0    0.00    0.00       4         new_matrix [8]
------------------------------------------------
-                0.00    0.00       4/4           random_matrix [3]
-[9]      0.0    0.00    0.00       4         set_seed [9]
------------------------------------------------
-                0.00    0.00       1/1           compute_engine [4]
-[10]     0.0    0.00    0.00       1         command_bye [10]
-                0.00    0.00       1/1           release [12]
------------------------------------------------
-                0.00    0.00       1/1           main [1]
-[11]     0.0    0.00    0.00       1         define_settings [11]
-                0.00    0.00       1/1           set_nthreads [14]
-                0.00    0.00       1/1           set_dimensions [13]
------------------------------------------------
-                0.00    0.00       1/1           command_bye [10]
-[12]     0.0    0.00    0.00       1         release [12]
------------------------------------------------
-                0.00    0.00       1/1           define_settings [11]
-[13]     0.0    0.00    0.00       1         set_dimensions [13]
------------------------------------------------
-                0.00    0.00       1/1           define_settings [11]
-[14]     0.0    0.00    0.00       1         set_nthreads [14]
+                             400000042             _fini [1]
+[1]    100.0    1.43    0.00       0+400000042 _fini [1]
+                             400000042             _fini [1]
 -----------------------------------------------
 
  This table describes the call tree of the program, and was sorted by
@@ -195,7 +131,7 @@ index % time    self  children    called     name
  for that member, how many times it was called from other members of
  the cycle.
 
-Copyright (C) 2012-2014 Free Software Foundation, Inc.
+Copyright (C) 2012 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright
@@ -203,8 +139,4 @@ notice and this notice are preserved.
 
 Index by function name
 
-   [6] add_entry               [5] fast_rand              [12] release
-  [10] command_bye             [7] find_entry             [13] set_dimensions
-   [2] command_set             [1] main                   [14] set_nthreads
-   [4] compute_engine          [8] new_matrix              [9] set_seed
-  [11] define_settings         [3] random_matrix
+   [1] _fini

@@ -5,11 +5,15 @@
 
 /* utility functions */
 
+typedef struct matrix_t matrix_t;
+
 typedef struct occurances_t
 {
 	uint32_t *data;
 	char prev_operation;
+	matrix_t *pow[20];
 } occurances_t;
+
 
 typedef struct matrix_t
 {
