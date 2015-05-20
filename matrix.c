@@ -14,11 +14,15 @@
 #include "matrix.h"
 
 #define ALLOCATE_ROWS(i) ((g_height / g_nthreads) + !!(g_height % g_nthreads - i > 0))
+#define ALLOCATE_ROWS_OF_TILES(i) (((g_hard_width / 4) / g_nthreads) + !!((g_hard_width / 4) % g_nthreads - i > 0))
 #define MAX_RAND_VALUE 32767
 enum
 {
 	NOP, SEQUENCE, UNIFORM, IDENTITY, RANDOM, SCALAR_MUL_2, SOLVED
 };
+
+#define B 214013
+#define C 2531011
 
 static ssize_t g_hard_width = 0;
 static ssize_t g_soft_width = 0;
@@ -27,64 +31,68 @@ static ssize_t g_hard_elements = 0;
 static ssize_t g_soft_elements = 0;
 static ssize_t g_padding = 0;
 
-static matrix_t *pow_rubbish[255];
-static uint32_t rubbish_counter = 0;
+//static matrix_t *pow_rubbish[255];
+//static uint32_t rubbish_counter = 0;
 
 static ssize_t g_nthreads = 1;
 
-static uint32_t g_seed = 0;
 
 ////////////////////////////////
 ///     UTILITY FUNCTIONS    ///
 ////////////////////////////////
 
-/**
- * Returns pseudorandom number determined by the seed
- */
-static inline uint32_t fast_rand(void)
-{
-    g_seed = (214013 * g_seed + 2531011);
-    return (g_seed >> 16) & 0x7FFF;
-}
-/*
-static inline uint32_t fast_rand_seed(register uint32_t *seed)
-{
-    *seed = (214013 * (*seed) + 2531011);
-    return (*seed >> 16) & 0x7FFF;
-}
 
-static inline uint32_t int_pow(register uint32_t num, register uint32_t pow)
-{
-	if(pow == 0) return 1;
-	return num * int_pow(num, pow - 1);
-}
 
-static inline uint32_t get_pow_sum(register uint32_t num, register uint32_t pow)
+static inline unsigned powi(register unsigned input, register unsigned exponent)
 {
-	if(pow == 0)
+	if(exponent == 0)
 	{
 		return 1;
 	}
-	return int_pow(num, pow) + get_pow_sum(num, pow - 1);
-}
-*/
-/*
-static inline uint32_t get_seed(register uint32_t n, register uint32_t base_seed)
-{
-	if(n == 0)
+	if(exponent == 1)
 	{
-		return base_seed;
+		return input;
 	}
-	return (int_pow(214013, n) * base_seed) + (2531011 * get_pow_sum(214013, n - 1));
-}
-*/
+	else
+	{
+		register unsigned ret = powi(input, exponent >> 1);
+		register unsigned passon = ret * ret;
 
-/**
- * Sets the seed used when generating pseudorandom numbers
- */
-void set_seed(uint32_t seed)
+		if(exponent & 1)
+		{
+			register unsigned passon_odd = input * passon;
+			return passon_odd;
+		}
+		return passon;
+	}
+}
+
+static inline unsigned get_rand_set(register unsigned e)
 {
-	g_seed = seed;
+	register unsigned total = (powi(B, e) + 1);
+	e >>= 1;
+	while(e)
+	{
+		total *= (powi(B, e) + 1);
+		e >>= 1;
+	}
+	return total;
+}
+
+static inline unsigned get_msb(register unsigned n)
+{
+	register unsigned e = 0;
+	while(n >>= 1)
+	{
+		++e;
+	}
+	return e;
+}
+
+static inline unsigned get_seed(register unsigned seed, register unsigned num)
+{
+	register unsigned n = powi(2, get_msb(num));
+	return powi(B, num) * seed + C * get_rand_set(n);
 }
 
 /**
@@ -143,7 +151,6 @@ void display_row(register matrix_t *matrix_obj, const ssize_t row)
 	printf("\n");
 }
 
-
 /**
  * Displays given matrix column
  */
@@ -187,6 +194,13 @@ static inline void copy_occurances(register matrix_t *target_obj, register matri
 	if(target_obj == source_obj) return;
 	memcpy(target_obj->occurances->data, source_obj->occurances->data, (MAX_RAND_VALUE + 1) * sizeof(uint32_t));
 	target_obj->occurances->prev_operation = source_obj->occurances->prev_operation;
+	for(register uint32_t i = 20; i--;)
+	{
+		if(source_obj->occurances->pow[i])
+		{
+			copy_occurances(target_obj->occurances->pow[i], source_obj->occurances->pow[i]);
+		}
+	}
 }
 
 static inline void release_matrix_obj(register matrix_t *matrix_obj)
@@ -196,6 +210,7 @@ static inline void release_matrix_obj(register matrix_t *matrix_obj)
 	free(matrix_obj->data);
 	free(matrix_obj);
 }
+
 
 ////////////////////////////////
 ///   MATRIX INITALISATIONS  ///
@@ -207,7 +222,7 @@ static inline void release_matrix_obj(register matrix_t *matrix_obj)
 inline static matrix_t *new_matrix(void)
 {
 	matrix_t *matrix_obj = calloc(1, sizeof(matrix_t));
-	matrix_obj->data = calloc(g_hard_elements, sizeof(uint32_t));
+	matrix_obj->data = calloc(g_hard_width * g_hard_width, sizeof(uint32_t));
 	matrix_obj->occurances = calloc(1, sizeof(occurances_t));
 	matrix_obj->occurances->prev_operation = NOP;
 	matrix_obj->occurances->data = calloc(MAX_RAND_VALUE + 1, sizeof(uint32_t));
@@ -286,24 +301,25 @@ matrix_t *identity_matrix(void)
  * Returns new matrix with elements generated at random using given seed
  */
 // /* Serial random matrix
-matrix_t *random_matrix(register uint32_t seed)
+matrix_t *random_matrix_serial(register uint32_t seed)
 {
+
 	register matrix_t *matrix_obj = new_matrix();
 	register uint32_t *matrix_cpy = matrix_obj->data;
 
 	register uint32_t *occurances = matrix_obj->occurances->data;
 
-	g_seed = seed;
-
 	register uint32_t min = UINT32_MAX;
 	register uint32_t max = 0;
 	register uint32_t sum = 0;
+
 
 	for(register uint32_t y = g_height; y--;)
 	{
 		for(register uint32_t x = g_soft_width; x--;)
 		{
-			*matrix_cpy = fast_rand();
+			seed = (B * seed + C);
+			*matrix_cpy = (seed >> 16) & 0x7FFF;;
 			if(*matrix_cpy < min) min = *matrix_cpy;
 			if(*matrix_cpy > max) max = *matrix_cpy;
 			sum += *matrix_cpy;
@@ -322,13 +338,18 @@ matrix_t *random_matrix(register uint32_t seed)
 	return matrix_obj;
 }
 // */
-/*
+// /*
 struct random_argument
 {
 	matrix_t *matrix_obj;
 	uint32_t start_row;
 	uint32_t num_rows;
 	uint32_t seed;
+	uint32_t *mins;
+	uint32_t *maxes;
+	uint32_t *sums;
+	uint32_t id;
+	uint32_t *occurances;
 };
 
 static inline void *random_worker(void *arg)
@@ -337,21 +358,27 @@ static inline void *random_worker(void *arg)
 	register uint32_t *matrix = arguments->matrix_obj->data;
 	matrix += arguments->start_row * g_hard_width;
 
-	uint32_t seed = get_seed(arguments->start_row * g_soft_width, arguments->seed);
-	register uint32_t *seed_ptr = &seed;
+	register uint32_t seed = get_seed(arguments->start_row * g_soft_width, arguments->seed);
+
+	const register uint32_t id_const = arguments->id * (MAX_RAND_VALUE + 1);
+
+	register uint32_t *occurances = arguments->occurances + id_const;
 
 	register uint32_t min = UINT32_MAX;
 	register uint32_t max = 0;
 	register uint32_t sum = 0;
 
+
 	for(register uint32_t y = g_height; y--;)
 	{
 		for(register uint32_t x = g_soft_width; x--;)
 		{
-			*matrix = fast_rand_seed(seed_ptr);
+			seed = (B * seed + C);
+			*matrix = (seed >> 16) & 0x7FFF;
 			if(*matrix < min) min = *matrix;
 			if(*matrix > max) max = *matrix;
 			sum += *matrix;
+			occurances[id_const + *matrix]++;
 			++matrix;
 		}
 		matrix += g_padding;
@@ -369,7 +396,7 @@ matrix_t *random_matrix(register uint32_t seed)
 {
 	//if(g_nthreads == 1 || g_hard_width < 200)
 	//{
-		return random_matrix_serial(seed);
+		//return random_matrix_serial(seed);
 	//}
 
 	matrix_t *matrix_obj = new_matrix();
@@ -377,7 +404,7 @@ matrix_t *random_matrix(register uint32_t seed)
 	register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
 	register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
 	register uint32_t *sums = malloc(sizeof(uint32_t) * g_nthreads);
-	//register uint32_t *occurances = malloc(sizeof(uint32_t) * g_nthreads);
+	uint32_t *occurances = calloc(MAX_RAND_VALUE * 3 + 3, sizeof(uint32_t));
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -391,7 +418,11 @@ matrix_t *random_matrix(register uint32_t seed)
             .matrix_obj = matrix_obj,
             .start_row = start_row,
             .num_rows = this_rows,
-			.seed = seed
+			.seed = seed,
+			.mins = mins,
+			.maxes = maxes,
+			.sums = sums,
+			.occurances = occurances
         };
 		start_row += this_rows;
     }
@@ -404,6 +435,8 @@ matrix_t *random_matrix(register uint32_t seed)
 	register uint32_t min = UINT32_MAX;
 	register uint32_t max = 0;
 	register uint32_t sum = 0;
+	register uint32_t *matrix_occurances = matrix_obj->occurances->data;
+	memset(occurances, 0, sizeof(uint32_t) * (MAX_RAND_VALUE + 1));
 
 	for(register uint32_t i = g_nthreads; i--;)
 	{
@@ -411,6 +444,10 @@ matrix_t *random_matrix(register uint32_t seed)
 		sum += *(sums + i);
 		if(*(mins + i) < min) min = *(mins + i);
 		if(*(maxes + i) > max) max = *(maxes + i);
+		for(register uint32_t j = MAX_RAND_VALUE + 1; j--;)
+		{
+			matrix_occurances[j] += occurances[i * (MAX_RAND_VALUE + 1) + j];
+		}
     }
 
 	matrix_obj->min = min;
@@ -425,7 +462,7 @@ matrix_t *random_matrix(register uint32_t seed)
 
 	return matrix_obj;
 }
-*/
+// */
 
 /**
  * Returns new matrix with all elements set to given value
@@ -711,11 +748,6 @@ static inline void *clone_worker(void *arg)
 		result += 4;
 	}
 
-	// memcpy is actually slower... wtf?
-	//memcpy((void *)(result + arguments->start_row * g_width), (void *)(matrix + arguments->start_row * g_width), arguments->num_rows * g_width * sizeof(uint32_t));
-
-
-
 	return NULL;
 }
 
@@ -785,6 +817,7 @@ static inline void *reverse_worker(void *arg)
 	register uint32_t *result = arguments->result_obj->data;
 	result += arguments->start_row * g_hard_width;
 	matrix += g_hard_elements - arguments->start_row * g_hard_width - 1;
+
 
 	for(register uint32_t y = arguments->num_rows; y--;)
 	{
@@ -863,7 +896,40 @@ static inline void *transpose_worker(void *arg)
 	struct transpose_argument *arguments = (struct transpose_argument *)arg;
 	register uint32_t *matrix = arguments->matrix_obj->data;
 	register uint32_t *result = arguments->result_obj->data;
+	register uint32_t tile_width = g_hard_width / 4;
 
+	register uint32_t curr_y = arguments->start_row;
+	for(register uint32_t y = arguments->num_rows; y--;)
+	{
+		register uint32_t curr_x = 0;
+		for(register uint32_t x = tile_width; x--;)
+		{
+
+			__m128i row1 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 0);
+			__m128i row2 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 1);
+			__m128i row3 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 2);
+			__m128i row4 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 3);
+
+			__m128i t1 = _mm_unpacklo_epi32(row1, row2);
+			__m128i t2 = _mm_unpacklo_epi32(row3, row4);
+			__m128i t3 = _mm_unpackhi_epi32(row1, row2);
+			__m128i t4 = _mm_unpackhi_epi32(row3, row4);
+
+			row1 = _mm_unpacklo_epi64(t1, t2);
+			row2 = _mm_unpackhi_epi64(t1, t2);
+			row3 = _mm_unpacklo_epi64(t3, t4);
+			row4 = _mm_unpackhi_epi64(t3, t4);
+
+			_mm_store_si128((__m128i *)result + curr_x * g_hard_width + curr_y + tile_width * 0, row1);
+			_mm_store_si128((__m128i *)result + curr_x * g_hard_width + curr_y + tile_width * 1, row2);
+			_mm_store_si128((__m128i *)result + curr_x * g_hard_width + curr_y + tile_width * 2, row3);
+			_mm_store_si128((__m128i *)result + curr_x * g_hard_width + curr_y + tile_width * 3, row4);
+
+			++curr_x;
+		}
+		++curr_y;
+	}
+	/*
 	register uint32_t curr_y = arguments->start_row;
 	for(register uint32_t num_rows = arguments->num_rows; num_rows--;)
 	{
@@ -875,6 +941,7 @@ static inline void *transpose_worker(void *arg)
 		}
 		++curr_y;
 	}
+	*/
 	return NULL;
 }
 
@@ -892,7 +959,7 @@ matrix_t *transposed(register matrix_t *matrix_obj)
 	register uint32_t start_row = 0;
 	for(register uint32_t i = g_nthreads; i--;)
 	{
-		register uint32_t this_rows = ALLOCATE_ROWS(i);
+		register uint32_t this_rows = ALLOCATE_ROWS_OF_TILES(i);
         args[i] = (struct transpose_argument)
 		{
             .matrix_obj = matrix_obj,
@@ -1097,8 +1164,6 @@ matrix_t *scalar_add(register matrix_t *matrix_obj, const register uint32_t scal
 /**
  * Returns new matrix with scalar multiplied to each element
  */
-
-//// IF YOU GET MMAX FAILURE, REMOVE THE DO_MIN_MAX_SUM CHECKS FROM SCALAR MUL SINCE THEY'RE NOT SAFE!!
 
 struct scalar_mul_argument
 {
@@ -1695,6 +1760,7 @@ matrix_t *matrix_mul(register matrix_t *matrix_a_obj, register matrix_t *matrix_
 /**
  * Returns new matrix, powering the matrix to the exponent
  */
+/*
 static inline void pow_rubbish_add(matrix_t *garbage)
 {
 	pow_rubbish[rubbish_counter++] = garbage;
@@ -1720,7 +1786,7 @@ static inline void empty_rubbish(matrix_t *exception)
 	}
 	rubbish_counter = 0;
 }
-
+*/
 static inline matrix_t *m_pow(register matrix_t *matrix_obj, register uint32_t exponent)
 {
 	if(exponent == 1)
@@ -1731,19 +1797,28 @@ static inline matrix_t *m_pow(register matrix_t *matrix_obj, register uint32_t e
 	{
 		return cloned(matrix_obj);
 	}
+	else if(matrix_obj->occurances->pow[exponent])
+	{
+		return matrix_obj->occurances->pow[exponent];
+	}
 	else
 	{
 		register matrix_t *ret = m_pow(matrix_obj, exponent >> 1);
+		matrix_obj->occurances->pow[exponent >> 1] = ret;
+		/*
 		if(ret != matrix_obj)
 		{
 			pow_rubbish_add(ret);
 		}
+		*/
 		register matrix_t *passon = matrix_mul(ret, ret);
-		pow_rubbish_add(passon);
+		matrix_obj->occurances->pow[(exponent >> 1) + (exponent >> 1)] = ret;
+		// pow_rubbish_add(passon);
 		if(exponent & 1)
 		{
 			register matrix_t *passon_odd = matrix_mul(matrix_obj, passon);
-			pow_rubbish_add(passon_odd);
+			matrix_obj->occurances->pow[(exponent >> 1) + (exponent >> 1) + 1] = ret;
+			// pow_rubbish_add(passon_odd);
 			return passon_odd;
 		}
 		return passon;
@@ -1771,7 +1846,7 @@ matrix_t *matrix_pow(matrix_t *matrix_obj, const uint32_t exponent)
 
 
 	register matrix_t *ret = m_pow(matrix_obj, exponent);
-	empty_rubbish(ret);
+	// empty_rubbish(ret);
 	return ret;
 
 }
