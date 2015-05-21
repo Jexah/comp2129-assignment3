@@ -40,6 +40,9 @@ time /labcommon/comp2129/bin/matrix 10000 4 < tests/matrix_add_speed.in
 time ./matrix 400 1 < tests/random_matrix_speed.in
 time ./matrix 400 4 < tests/random_matrix_speed.in
 
+time ./matrix 5000 4 < tests/random_matrix_speed.in
+time ./matrix 5000 4 < tests/random_matrix_speed.in
+
 time ./matrix 10000 1 < tests/uniform_matrix_speed.in
 time ./matrix 10000 4 < tests/uniform_matrix_speed.in
 
