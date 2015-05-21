@@ -18,11 +18,13 @@
 #define MAX_RAND_VALUE 32767
 enum
 {
-	NOP, SEQUENCE, UNIFORM, IDENTITY, RANDOM, SCALAR_MUL_2, SOLVED
+	NOP, SEQUENCE, UNIFORM, IDENTITY, RANDOM, SCALAR_MUL_2, SOLVED, RANDOM_STATS
 };
 
-#define B 214013
-#define C 2531011
+enum
+{
+	MINIMUM, MAXIMUM, SUM, FREQUENCY
+};
 
 static ssize_t g_hard_width = 0;
 static ssize_t g_soft_width = 0;
@@ -36,64 +38,6 @@ static ssize_t g_padding = 0;
 
 static ssize_t g_nthreads = 1;
 
-
-////////////////////////////////
-///     UTILITY FUNCTIONS    ///
-////////////////////////////////
-
-
-
-static inline unsigned powi(register unsigned input, register unsigned exponent)
-{
-	if(exponent == 0)
-	{
-		return 1;
-	}
-	if(exponent == 1)
-	{
-		return input;
-	}
-	else
-	{
-		register unsigned ret = powi(input, exponent >> 1);
-		register unsigned passon = ret * ret;
-
-		if(exponent & 1)
-		{
-			register unsigned passon_odd = input * passon;
-			return passon_odd;
-		}
-		return passon;
-	}
-}
-
-static inline unsigned get_rand_set(register unsigned e)
-{
-	register unsigned total = (powi(B, e) + 1);
-	e >>= 1;
-	while(e)
-	{
-		total *= (powi(B, e) + 1);
-		e >>= 1;
-	}
-	return total;
-}
-
-static inline unsigned get_msb(register unsigned n)
-{
-	register unsigned e = 0;
-	while(n >>= 1)
-	{
-		++e;
-	}
-	return e;
-}
-
-static inline unsigned get_seed(register unsigned seed, register unsigned num)
-{
-	register unsigned n = powi(2, get_msb(num));
-	return powi(B, num) * seed + C * get_rand_set(n);
-}
 
 /**
  * Sets the number of threads available
@@ -192,12 +136,13 @@ static inline void set_occurances(register matrix_t *matrix_obj, register char p
 static inline void copy_occurances(register matrix_t *target_obj, register matrix_t *source_obj)
 {
 	if(target_obj == source_obj) return;
-	memcpy(target_obj->occurances->data, source_obj->occurances->data, (MAX_RAND_VALUE + 1) * sizeof(uint32_t));
+	memcpy(target_obj->occurances->data, source_obj->occurances->data, 2 * sizeof(uint32_t));
 	target_obj->occurances->prev_operation = source_obj->occurances->prev_operation;
 	for(register uint32_t i = 20; i--;)
 	{
 		if(source_obj->occurances->pow[i])
 		{
+			target_obj->occurances->pow[i] = cloned(source_obj->occurances->pow[i]);
 			copy_occurances(target_obj->occurances->pow[i], source_obj->occurances->pow[i]);
 		}
 	}
@@ -221,11 +166,12 @@ static inline void release_matrix_obj(register matrix_t *matrix_obj)
  */
 inline static matrix_t *new_matrix(void)
 {
-	matrix_t *matrix_obj = calloc(1, sizeof(matrix_t));
-	matrix_obj->data = calloc(g_hard_width * g_hard_width, sizeof(uint32_t));
+	matrix_t *matrix_obj;
+	matrix_obj = calloc(1, sizeof(matrix_t));
+	matrix_obj->data = calloc(1, g_hard_width * g_hard_width * sizeof(uint32_t));
 	matrix_obj->occurances = calloc(1, sizeof(occurances_t));
 	matrix_obj->occurances->prev_operation = NOP;
-	matrix_obj->occurances->data = calloc(MAX_RAND_VALUE + 1, sizeof(uint32_t));
+	matrix_obj->occurances->data = calloc(2, sizeof(uint32_t));
 	return matrix_obj;
 }
 
@@ -301,168 +247,34 @@ matrix_t *identity_matrix(void)
  * Returns new matrix with elements generated at random using given seed
  */
 // /* Serial random matrix
-matrix_t *random_matrix_serial(register uint32_t seed)
+matrix_t *random_matrix(register uint32_t seed)
 {
 
 	register matrix_t *matrix_obj = new_matrix();
 	register uint32_t *matrix_cpy = matrix_obj->data;
-
-	register uint32_t *occurances = matrix_obj->occurances->data;
-
 	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
-	register uint32_t sum = 0;
 
 
 	for(register uint32_t y = g_height; y--;)
 	{
 		for(register uint32_t x = g_soft_width; x--;)
 		{
-			seed = (B * seed + C);
-			*matrix_cpy = (seed >> 16) & 0x7FFF;;
-			if(*matrix_cpy < min) min = *matrix_cpy;
-			if(*matrix_cpy > max) max = *matrix_cpy;
-			sum += *matrix_cpy;
-			occurances[*matrix_cpy]++;
+			seed *= 214013;
+			seed += 2531011;
+			*matrix_cpy = seed;
+			*matrix_cpy >>= 16;
+			*matrix_cpy &= 0x7FFF;
+			if(min) if(*matrix_cpy < min) min = *matrix_cpy;
 			++matrix_cpy;
 		}
 		matrix_cpy += g_padding;
 	}
 
 	matrix_obj->occurances->prev_operation = RANDOM;
-
 	matrix_obj->min = min;
-	matrix_obj->max = max;
-	matrix_obj->sum = sum;
 
 	return matrix_obj;
 }
-// */
-// /*
-struct random_argument
-{
-	matrix_t *matrix_obj;
-	uint32_t start_row;
-	uint32_t num_rows;
-	uint32_t seed;
-	uint32_t *mins;
-	uint32_t *maxes;
-	uint32_t *sums;
-	uint32_t id;
-	uint32_t *occurances;
-};
-
-static inline void *random_worker(void *arg)
-{
-	struct random_argument *arguments = (struct random_argument *)arg;
-	register uint32_t *matrix = arguments->matrix_obj->data;
-	matrix += arguments->start_row * g_hard_width;
-
-	register uint32_t seed = get_seed(arguments->start_row * g_soft_width, arguments->seed);
-
-	const register uint32_t id_const = arguments->id * (MAX_RAND_VALUE + 1);
-
-	register uint32_t *occurances = arguments->occurances + id_const;
-
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
-	register uint32_t sum = 0;
-
-
-	for(register uint32_t y = g_height; y--;)
-	{
-		for(register uint32_t x = g_soft_width; x--;)
-		{
-			seed = (B * seed + C);
-			*matrix = (seed >> 16) & 0x7FFF;
-			if(*matrix < min) min = *matrix;
-			if(*matrix > max) max = *matrix;
-			sum += *matrix;
-			occurances[id_const + *matrix]++;
-			++matrix;
-		}
-		matrix += g_padding;
-	}
-
-	arguments->matrix_obj->min = min;
-	arguments->matrix_obj->max = max;
-	arguments->matrix_obj->sum = sum;
-
-	return NULL;
-}
-
-
-matrix_t *random_matrix(register uint32_t seed)
-{
-	//if(g_nthreads == 1 || g_hard_width < 200)
-	//{
-		//return random_matrix_serial(seed);
-	//}
-
-	matrix_t *matrix_obj = new_matrix();
-
-	register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
-	register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
-	register uint32_t *sums = malloc(sizeof(uint32_t) * g_nthreads);
-	uint32_t *occurances = calloc(MAX_RAND_VALUE * 3 + 3, sizeof(uint32_t));
-
-	pthread_t thread_ids[g_nthreads];
-
-	struct random_argument *args = malloc(sizeof(struct random_argument) * g_nthreads);
-	register uint32_t start_row = 0;
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-		register uint32_t this_rows = ALLOCATE_ROWS(i);
-        args[i] = (struct random_argument)
-		{
-            .matrix_obj = matrix_obj,
-            .start_row = start_row,
-            .num_rows = this_rows,
-			.seed = seed,
-			.mins = mins,
-			.maxes = maxes,
-			.sums = sums,
-			.occurances = occurances
-        };
-		start_row += this_rows;
-    }
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_create(thread_ids + i, NULL, random_worker, args + i);
-    }
-
-	register uint32_t min = UINT32_MAX;
-	register uint32_t max = 0;
-	register uint32_t sum = 0;
-	register uint32_t *matrix_occurances = matrix_obj->occurances->data;
-	memset(occurances, 0, sizeof(uint32_t) * (MAX_RAND_VALUE + 1));
-
-	for(register uint32_t i = g_nthreads; i--;)
-	{
-        pthread_join(*(thread_ids + i), NULL);
-		sum += *(sums + i);
-		if(*(mins + i) < min) min = *(mins + i);
-		if(*(maxes + i) > max) max = *(maxes + i);
-		for(register uint32_t j = MAX_RAND_VALUE + 1; j--;)
-		{
-			matrix_occurances[j] += occurances[i * (MAX_RAND_VALUE + 1) + j];
-		}
-    }
-
-	matrix_obj->min = min;
-	matrix_obj->max = max;
-	matrix_obj->sum = sum;
-
-	free(mins);
-	free(maxes);
-	free(sums);
-
-	free(args);
-
-	return matrix_obj;
-}
-// */
 
 /**
  * Returns new matrix with all elements set to given value
@@ -742,7 +554,7 @@ static inline void *clone_worker(void *arg)
 
 	for(register uint32_t i = arguments->num_rows * g_hard_width / 4; i--;)
 	{
-		__m128i vput = _mm_load_si128((__m128i *)matrix);
+		__m128i vput = _mm_loadu_si128((__m128i *)matrix);
 		_mm_store_si128((__m128i *)result, vput);
 		matrix += 4;
 		result += 4;
@@ -758,7 +570,7 @@ matrix_t *cloned(register matrix_t *matrix_obj) {
 		return identity_matrix();
 	}
 
-	register matrix_t *result_obj = new_matrix();
+	matrix_t *result_obj = new_matrix();
 
 	pthread_t thread_ids[g_nthreads];
 
@@ -905,10 +717,10 @@ static inline void *transpose_worker(void *arg)
 		for(register uint32_t x = tile_width; x--;)
 		{
 
-			__m128i row1 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 0);
-			__m128i row2 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 1);
-			__m128i row3 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 2);
-			__m128i row4 = _mm_load_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 3);
+			__m128i row1 = _mm_loadu_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 0);
+			__m128i row2 = _mm_loadu_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 1);
+			__m128i row3 = _mm_loadu_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 2);
+			__m128i row4 = _mm_loadu_si128((__m128i *)matrix + curr_x + curr_y * 4 * tile_width + tile_width * 3);
 
 			__m128i t1 = _mm_unpacklo_epi32(row1, row2);
 			__m128i t2 = _mm_unpacklo_epi32(row3, row4);
@@ -1073,20 +885,24 @@ matrix_t *scalar_add(register matrix_t *matrix_obj, const register uint32_t scal
 
 	register uint32_t do_min_max_sum = 1;
 
-	if(scalar > 0)
+	if(matrix_obj->occurances->prev_operation != RANDOM)
 	{
-		if(matrix_obj->max + scalar > matrix_obj->max && matrix_obj->min + scalar > matrix_obj->min)
+		if(scalar > 0)
 		{
-			do_min_max_sum = 0;
+			if(matrix_obj->max + scalar > matrix_obj->max && matrix_obj->min + scalar > matrix_obj->min)
+			{
+				do_min_max_sum = 0;
+			}
+		}
+		else
+		{
+			if(matrix_obj->max + scalar < matrix_obj->max && matrix_obj->min + scalar < matrix_obj->min)
+			{
+				do_min_max_sum = 0;
+			}
 		}
 	}
-	else
-	{
-		if(matrix_obj->max + scalar < matrix_obj->max && matrix_obj->min + scalar < matrix_obj->min)
-		{
-			do_min_max_sum = 0;
-		}
-	}
+
 
 	register uint32_t *mins = NULL;
 	register uint32_t *maxes = NULL;
@@ -1224,6 +1040,12 @@ matrix_t *scalar_mul(register matrix_t *matrix_obj, const register uint32_t scal
 	{
 		return cloned(matrix_obj);
 	}
+	/*
+	if(scalar == 2)
+	{
+		return matrix_add(matrix_obj, matrix_obj);
+	}
+	*/
 
 	register matrix_t *result_obj = new_matrix();
 
@@ -1332,7 +1154,6 @@ static inline void *matrix_add_worker(void *arg)
 	register uint32_t max;
 	register uint32_t sum;
 
-	__m128i vsum = _mm_setzero_si128();
 	__m128i vmins = _mm_set_epi32(UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX);
 	__m128i vmaxes = _mm_setzero_si128();
 	__m128i vsums = _mm_setzero_si128();
@@ -1343,8 +1164,8 @@ static inline void *matrix_add_worker(void *arg)
 	{
 		for(register uint32_t x = x_max; x--;)
 		{
-			__m128i vma = _mm_load_si128((__m128i *)matrix_a);
-			__m128i vmb = _mm_load_si128((__m128i *)matrix_b);
+			__m128i vma = _mm_loadu_si128((__m128i *)matrix_a);
+			__m128i vmb = _mm_loadu_si128((__m128i *)matrix_b);
 			__m128i vresult = _mm_add_epi32(vma, vmb);
 			_mm_store_si128((__m128i *)result, vresult);
 
@@ -1375,11 +1196,11 @@ static inline void *matrix_add_worker(void *arg)
 	vmaxes = _mm_max_epu32(vmaxes, vmax_s);
 	max = _mm_cvtsi128_si32(vmaxes);
 
-	__m128i vsum_s = _mm_shuffle_epi32(vsum, _MM_SHUFFLE(0, 0, 3, 2));
-	vsum = _mm_add_epi32(vsum, vsum_s);
-	vsum_s = _mm_shuffle_epi32(vsum, _MM_SHUFFLE(0, 0, 0, 1));
-	vsum = _mm_add_epi32(vsum, vsum_s);
-	sum = _mm_cvtsi128_si32(vsum);
+	__m128i vsum_s = _mm_shuffle_epi32(vsums, _MM_SHUFFLE(0, 0, 3, 2));
+	vsums = _mm_add_epi32(vsums, vsum_s);
+	vsum_s = _mm_shuffle_epi32(vsums, _MM_SHUFFLE(0, 0, 0, 1));
+	vsums = _mm_add_epi32(vsums, vsum_s);
+	sum = _mm_cvtsi128_si32(vsums);
 
 	// */
 
@@ -1431,7 +1252,7 @@ matrix_t *matrix_add(matrix_t *matrix_a_obj, matrix_t *matrix_b_obj)
 		is_identity = 1;
 		result_obj = cloned(matrix_b_obj);
 	}
-	else if(matrix_a_obj->occurances->prev_operation == IDENTITY)
+	else if(matrix_b_obj->occurances->prev_operation == IDENTITY)
 	{
 		is_identity = 1;
 		result_obj = cloned(matrix_a_obj);
@@ -1675,7 +1496,7 @@ matrix_t *matrix_mul(register matrix_t *matrix_a_obj, register matrix_t *matrix_
 		matrix_t *result_obj = cloned(matrix_b_obj);
 		return result_obj;
 	}
-	if(matrix_a_obj->occurances->prev_operation == IDENTITY)
+	if(matrix_b_obj->occurances->prev_operation == IDENTITY)
 	{
 		matrix_t *result_obj = cloned(matrix_a_obj);
 		return result_obj;
@@ -1795,7 +1616,7 @@ static inline matrix_t *m_pow(register matrix_t *matrix_obj, register uint32_t e
 	}
 	else if(matrix_obj->occurances->prev_operation == IDENTITY)
 	{
-		return cloned(matrix_obj);
+		return identity_matrix();
 	}
 	else if(matrix_obj->occurances->pow[exponent])
 	{
@@ -1812,12 +1633,10 @@ static inline matrix_t *m_pow(register matrix_t *matrix_obj, register uint32_t e
 		}
 		*/
 		register matrix_t *passon = matrix_mul(ret, ret);
-		matrix_obj->occurances->pow[(exponent >> 1) + (exponent >> 1)] = ret;
 		// pow_rubbish_add(passon);
 		if(exponent & 1)
 		{
 			register matrix_t *passon_odd = matrix_mul(matrix_obj, passon);
-			matrix_obj->occurances->pow[(exponent >> 1) + (exponent >> 1) + 1] = ret;
 			// pow_rubbish_add(passon_odd);
 			return passon_odd;
 		}
@@ -1856,15 +1675,6 @@ matrix_t *matrix_pow(matrix_t *matrix_obj, const uint32_t exponent)
 ////////////////////////////////
 
 /**
- * Returns the sum of all elements
- */
-
-uint32_t get_sum(register matrix_t *matrix_obj)
-{
-	return matrix_obj->sum;
-}
-
-/**
  * Returns the trace of the matrix
  */
 uint32_t get_trace(register matrix_t *matrix_obj)
@@ -1886,6 +1696,21 @@ uint32_t get_trace(register matrix_t *matrix_obj)
 }
 
 /**
+ * Returns the sum of all elements
+ */
+
+uint32_t get_sum(register matrix_t *matrix_obj)
+{
+
+	if(matrix_obj->occurances->prev_operation != RANDOM)
+	{
+		return matrix_obj->sum;
+	}
+
+	return get_stats(matrix_obj, SUM, 0);
+}
+
+/**
  * Returns the smallest value in the matrix
  */
 
@@ -1899,7 +1724,132 @@ uint32_t get_minimum(register matrix_t *matrix_obj)
  */
 uint32_t get_maximum(register matrix_t *matrix_obj)
 {
-	return matrix_obj->max;
+
+	if(matrix_obj->occurances->prev_operation != RANDOM)
+	{
+		return matrix_obj->max;
+	}
+
+	return get_stats(matrix_obj, MAXIMUM, 0);
+}
+
+struct stats_argument
+{
+	matrix_t *matrix_obj;
+	uint32_t *mins;
+	uint32_t *maxes;
+	uint32_t *sums;
+	uint32_t num_rows;
+	uint32_t start_row;
+	uint32_t id;
+};
+
+static inline void *stats_worker(void *arg)
+{
+	struct stats_argument *arguments = (struct stats_argument *)arg;
+	register uint32_t *matrix = arguments->matrix_obj->data;
+
+	matrix += arguments->start_row * g_hard_width;
+
+	register uint32_t max;
+	register uint32_t sum;
+
+	__m128i vmaxes = _mm_setzero_si128();
+	__m128i vsums = _mm_setzero_si128();
+
+	register uint32_t x_max = g_hard_width / 4;
+
+	for(register uint32_t y = arguments->num_rows; y--;)
+	{
+		for(register uint32_t x = x_max; x--;)
+		{
+			__m128i vmatrix = _mm_loadu_si128((__m128i *)matrix);
+			vmaxes = _mm_max_epu32(vmaxes, vmatrix);
+			vsums = _mm_add_epi32(vsums, vmatrix);
+			matrix += 4;
+		}
+		matrix += g_padding;
+	}
+
+	__m128i vmax_s = _mm_shuffle_epi32(vmaxes, _MM_SHUFFLE(0, 0, 3, 2));
+	vmaxes = _mm_max_epu32(vmaxes, vmax_s);
+	vmax_s = _mm_shuffle_epi32(vmaxes, _MM_SHUFFLE(0, 0, 0, 1));
+	vmaxes = _mm_max_epu32(vmaxes, vmax_s);
+	max = _mm_cvtsi128_si32(vmaxes);
+
+	__m128i vsum_s = _mm_shuffle_epi32(vsums, _MM_SHUFFLE(0, 0, 3, 2));
+	vsums = _mm_add_epi32(vsums, vsum_s);
+	vsum_s = _mm_shuffle_epi32(vsums, _MM_SHUFFLE(0, 0, 0, 1));
+	vsums = _mm_add_epi32(vsums, vsum_s);
+	sum = _mm_cvtsi128_si32(vsums);
+
+	*(arguments->maxes + arguments->id) = max;
+	*(arguments->sums + arguments->id) = sum;
+
+	return NULL;
+}
+
+uint32_t get_stats(register matrix_t *matrix_obj, char type, register uint32_t value)
+{
+	pthread_t thread_ids[g_nthreads];
+
+	//register uint32_t *mins = NULL;
+	register uint32_t *maxes = NULL;
+	register uint32_t *sums = NULL;
+
+	//mins = malloc(sizeof(uint32_t) * g_nthreads);
+	maxes = malloc(sizeof(uint32_t) * g_nthreads);
+	sums = malloc(sizeof(uint32_t) * g_nthreads);
+
+	struct stats_argument *args = malloc(sizeof(struct stats_argument) * g_nthreads);
+	register uint32_t start_row = 0;
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		register uint32_t this_rows = ALLOCATE_ROWS(i);
+        args[i] = (struct stats_argument)
+		{
+            .matrix_obj = matrix_obj,
+            .start_row = start_row,
+            .num_rows = this_rows,
+			.maxes = maxes,
+			.sums = sums,
+			.id = i
+        };
+		start_row += this_rows;
+    }
+
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+        pthread_create(thread_ids + i, NULL, stats_worker, args + i);
+    }
+
+	register uint32_t max = 0;
+	register uint32_t sum = 0;
+
+	matrix_obj->occurances->prev_operation = RANDOM_STATS;
+
+	for(register uint32_t i = g_nthreads; i--;)
+	{
+		pthread_join(*(thread_ids + i), NULL);
+		sum += *(sums + i);
+		if(*(maxes + i) > max) max = *(maxes + i);
+	}
+
+	matrix_obj->max = max;
+	matrix_obj->sum = sum;
+
+
+	free(args);
+
+	switch(type)
+	{
+		case MAXIMUM:
+			return max;
+		case SUM:
+			return sum;
+		default:
+			return 0;
+	}
 }
 
 /**
@@ -1954,7 +1904,7 @@ static inline void *get_cmpe_worker(void *arg)
 
 	for(register uint32_t i = total_4s; i--;)
 	{
-		__m128i vcmp = _mm_load_si128((__m128i *)matrix);
+		__m128i vcmp = _mm_loadu_si128((__m128i *)matrix);
 		__m128i vres = _mm_cmpeq_epi32(vvalue, vcmp);
 		vres = _mm_srli_epi32(vres, 31);
 		vsum = _mm_add_epi32(vres, vsum);
@@ -1971,7 +1921,7 @@ static inline void *get_cmpe_worker(void *arg)
 
 uint32_t get_frequency(register matrix_t *matrix_obj, register uint32_t value)
 {
-	if(value < matrix_obj->min || value > matrix_obj->max)
+	if(value < matrix_obj->min || (value > matrix_obj->max && matrix_obj->occurances->prev_operation != RANDOM))
 	{
 		return 0;
 	}
@@ -1983,9 +1933,9 @@ uint32_t get_frequency(register matrix_t *matrix_obj, register uint32_t value)
 			case SCALAR_MUL_2:
 				if(value & 1)
 				{
-					break;
+					return 0;
 				}
-				return 0;
+				break;
 			case UNIFORM:
 				if(value == *(matrix_obj->occurances->data))
 				{
@@ -2012,14 +1962,6 @@ uint32_t get_frequency(register matrix_t *matrix_obj, register uint32_t value)
 					return g_height;
 				}
 				return 0;
-			case RANDOM:
-				return *(matrix_obj->occurances->data + value);
-			case SOLVED:
-				for(register uint32_t i = g_soft_elements; i--;)
-				{
-
-				}
-				break;
 		}
 
 	}
