@@ -1545,22 +1545,6 @@ static inline void *get_cmpe_worker(void *arg){
 		}
 		matrix += g_padding;
 	}
-	/*
-	__m128i vvalue = _mm_set_epi32(value, value, value, value);
-	__m128i vsum = _mm_setzero_si128();
-	register uint32_t total_4s = g_hard_width / 4 * arguments->num_rows;
-
-	for(register uint32_t i = total_4s; i--;){
-		__m128i vcmp = _mm_load_si128((__m128i *)matrix);
-		__m128i vres = _mm_cmpeq_epi32(vvalue, vcmp);
-		vres = _mm_srli_epi32(vres, 31);
-		vsum = _mm_add_epi32(vres, vsum);
-		matrix += 4;
-	}
-	uint32_t res[4];
-	_mm_store_si128((__m128i *)res, vsum);
-	count = *(res) + *(res + 1) + *(res + 2) + *(res + 3);
-	*/
 	arguments->result[arguments->id] = count;
 	return NULL;
 }
