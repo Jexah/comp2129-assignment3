@@ -615,7 +615,8 @@ static inline void *scalar_add_worker(void *arg){
 
 	for(register uint32_t y = arguments->num_rows; y--;){
 		for(register uint32_t x = g_soft_width; x--;){
-			*result++ = *matrix++ + scalar;
+			*result = *matrix++ + scalar;
+			++result;
 		}
 		matrix += g_padding;
 		result += g_padding;
@@ -716,6 +717,9 @@ matrix_t *scalar_mul(register matrix_t *matrix_obj, const register uint32_t scal
 	if(scalar == 1){
 		return cloned(matrix_obj);
 	}
+	if(scalar == 2){
+		return matrix_add(matrix_obj, matrix_obj);
+	}
 
 
 	register matrix_t *result_obj = new_matrix();
@@ -784,9 +788,9 @@ struct matrix_add_argument
 	matrix_t *matrix_a_obj;
 	matrix_t *matrix_b_obj;
 	matrix_t *result_obj;
-	//uint32_t *mins;
-	//uint32_t *maxes;
-	//uint32_t *sums;
+	uint32_t *mins;
+	uint32_t *maxes;
+	uint32_t *sums;
 	uint32_t num_rows;
 	uint32_t start_row;
 	uint32_t id;
@@ -815,17 +819,16 @@ static inline void *matrix_add_worker(void *arg){
 		return NULL;
 	}
 
-	for(register uint32_t y = arguments->num_rows; y--;){
-		for(register uint32_t x = g_soft_width; x--;){
-			*result++ = *matrix_a++ + *matrix_b++;
-		}
-		result += g_padding;
-		matrix_a += g_padding;
-		matrix_b += g_padding;
-	}
+	register uint32_t min;
+	register uint32_t max;
+	register uint32_t sum;
 
-/*
+	__m128i vmins = _mm_set_epi32(UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX);
+	__m128i vmaxes = _mm_setzero_si128();
+	__m128i vsums = _mm_setzero_si128();
+
 	register uint32_t x_max = g_hard_width / 4;
+
 	for(register uint32_t y = arguments->num_rows; y--;){
 		for(register uint32_t x = x_max; x--;){
 			__m128i vma = _mm_load_si128((__m128i *)matrix_a);
@@ -842,8 +845,7 @@ static inline void *matrix_add_worker(void *arg){
 			result += 4;
 		}
 	}
-	*/
-/*
+
 	__m128i vmin_s = _mm_shuffle_epi32(vmins, _MM_SHUFFLE(0, 0, 3, 2));
 	vmins = _mm_min_epu32(vmins, vmin_s);
 	vmin_s = _mm_shuffle_epi32(vmins, _MM_SHUFFLE(0, 0, 0, 1));
@@ -865,7 +867,7 @@ static inline void *matrix_add_worker(void *arg){
 	*(arguments->mins + arguments->id) = min;
 	*(arguments->maxes + arguments->id) = max;
 	*(arguments->sums + arguments->id) = sum;
-*/
+
 	return NULL;
 }
 
@@ -896,9 +898,9 @@ matrix_t *matrix_add(matrix_t *matrix_a_obj, matrix_t *matrix_b_obj){
 
 	pthread_t thread_ids[g_nthreads];
 
-	//register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
-	//register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
-	//register uint32_t *sums = malloc(sizeof(uint32_t) * g_nthreads);
+	register uint32_t *mins = malloc(sizeof(uint32_t) * g_nthreads);
+	register uint32_t *maxes = malloc(sizeof(uint32_t) * g_nthreads);
+	register uint32_t *sums = malloc(sizeof(uint32_t) * g_nthreads);
 
 	struct matrix_add_argument *args = malloc(sizeof(struct matrix_add_argument) * g_nthreads);
 	register uint32_t start_row = 0;
@@ -911,9 +913,9 @@ matrix_t *matrix_add(matrix_t *matrix_a_obj, matrix_t *matrix_b_obj){
 			.result_obj = result_obj,
             .start_row = start_row,
             .num_rows = this_rows,
-			//.mins = mins,
-			//.maxes = maxes,
-			//.sums = sums,
+			.mins = mins,
+			.maxes = maxes,
+			.sums = sums,
 			.id = i,
 			.is_identity = is_identity
         };
@@ -924,19 +926,19 @@ matrix_t *matrix_add(matrix_t *matrix_a_obj, matrix_t *matrix_b_obj){
         pthread_create(thread_ids + i, NULL, matrix_add_worker, args + i);
     }
 
-	//register uint32_t min = UINT32_MAX;
-	//register uint32_t max = 0;
-	//register uint32_t sum = 0;
+	register uint32_t min = UINT32_MAX;
+	register uint32_t max = 0;
+	register uint32_t sum = 0;
 
 	reset_properties(result_obj);
 
 	for(register uint32_t i = g_nthreads; i--;){
         pthread_join(*(thread_ids + i), NULL);
-		//sum += *(sums + i);
-		//if(*(mins + i) < min) min = *(mins + i);
-		//if(*(maxes + i) > max) max = *(maxes + i);
+		sum += *(sums + i);
+		if(*(mins + i) < min) min = *(mins + i);
+		if(*(maxes + i) > max) max = *(maxes + i);
     }
-/*
+
 	result_obj->min = malloc(sizeof(uint32_t));
 	result_obj->min->result = min;
 
@@ -949,7 +951,7 @@ matrix_t *matrix_add(matrix_t *matrix_a_obj, matrix_t *matrix_b_obj){
 	free(mins);
 	free(maxes);
 	free(sums);
-*/
+
 	free(args);
 
 	return result_obj;
@@ -1534,9 +1536,16 @@ static inline void *get_cmpe_worker(void *arg){
 	struct get_cmpe_argument *arguments = (struct get_cmpe_argument *)arg;
 	register uint32_t *matrix = arguments->matrix_obj->data;
 	matrix += arguments->start_row * g_hard_width;
-	uint32_t value = arguments->value;
+	register uint32_t value = arguments->value;
 	register uint32_t count = 0;
 
+	for(register uint32_t y = arguments->num_rows; y--;){
+		for(register uint32_t x = g_soft_width; x--;){
+			count += value == *matrix++;
+		}
+		matrix += g_padding;
+	}
+	/*
 	__m128i vvalue = _mm_set_epi32(value, value, value, value);
 	__m128i vsum = _mm_setzero_si128();
 	register uint32_t total_4s = g_hard_width / 4 * arguments->num_rows;
@@ -1548,10 +1557,10 @@ static inline void *get_cmpe_worker(void *arg){
 		vsum = _mm_add_epi32(vres, vsum);
 		matrix += 4;
 	}
-
 	uint32_t res[4];
 	_mm_store_si128((__m128i *)res, vsum);
 	count = *(res) + *(res + 1) + *(res + 2) + *(res + 3);
+	*/
 	arguments->result[arguments->id] = count;
 	return NULL;
 }
@@ -1629,11 +1638,6 @@ uint32_t get_frequency(register matrix_t *matrix_obj, register uint32_t value){
         pthread_join(*(thread_ids + i), NULL);
 		count += *(result + i);
     }
-
-	if(!value)
-	{
-		count -= g_padding * g_height;
-	}
 
 	free(result);
 
