@@ -7,21 +7,31 @@
 
 typedef struct matrix_t matrix_t;
 
-typedef struct occurances_t
+typedef struct calculated_t
 {
-	uint32_t *data;
-	char prev_operation;
+	uint32_t result;
+} calculated_t;
+
+typedef struct prev_operation_t
+{
+	uint32_t type;
+	uint32_t options[2];
+} prev_operation_t;
+
+typedef struct properties_t
+{
+	prev_operation_t *prev_operation;
 	matrix_t *pow[20];
-} occurances_t;
+} properties_t;
 
 
 typedef struct matrix_t
 {
 	uint32_t *data;
-	uint32_t min;
-	uint32_t max;
-	uint32_t sum;
-	occurances_t *occurances;
+	calculated_t *min;
+	calculated_t *max;
+	calculated_t *sum;
+	properties_t *properties;
 } matrix_t;
 
 typedef struct kvp_t

@@ -90,8 +90,8 @@ void release(void) {
     }
 
     for (ssize_t i = 0; i < g_nentries; i++) {
-		free(g_entries[i]->matrix->occurances->data);
-		free(g_entries[i]->matrix->occurances);
+		free(g_entries[i]->matrix->properties->prev_operation);
+    	free(g_entries[i]->matrix->properties);
         free(g_entries[i]->matrix->data);
         free(g_entries[i]->matrix);
         free(g_entries[i]);
@@ -256,8 +256,8 @@ void command_set(const char* line) {
     if (e == NULL) {
         e = add_entry(key);
     } else {
-		free(e->matrix->occurances->data);
-		free(e->matrix->occurances);
+		free(e->matrix->properties->prev_operation);
+    	free(e->matrix->properties);
         free(e->matrix->data);
         free(e->matrix);
     }
